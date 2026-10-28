@@ -10,11 +10,21 @@
 # start (its org.freedesktop.secrets lookup times out), and WebKit waits for it.
 set -eu
 if [ -z "${DBUS_SESSION_BUS_ADDRESS_HEADLESS:-}" ]; then
-  DBUS_SESSION_BUS_ADDRESS_HEADLESS=1 exec timeout 120 dbus-run-session -- "$0" "$@"
+  # A throwaway config directory keeps the nested session from loading the
+  # user's settings and extensions, and lets it change settings freely.
+  config=$(mktemp -d)
+  trap 'rm -rf "$config"' EXIT
+  DBUS_SESSION_BUS_ADDRESS_HEADLESS=1 XDG_CONFIG_HOME=$config \
+    timeout 120 dbus-run-session -- "$0" "$@"
+  exit
 fi
 out=$(realpath -m "$1"); shift
 display=msgv-shot-$$
 logdir=$(mktemp -d)
+
+# No notification banners (they can show account names) and no welcome tour.
+gsettings set org.gnome.desktop.notifications show-banners false
+gsettings set org.gnome.shell welcome-dialog-last-shown-version "'99999'"
 
 gnome-shell --headless --unsafe-mode --virtual-monitor 1100x800 \
   --wayland-display "$display" >"$logdir/shell.log" 2>&1 &
@@ -33,6 +43,11 @@ WAYLAND_DISPLAY=$display flatpak run --user --no-documents-portal \
   "io.github.larsw.MSGViewer${MSGV_BRANCH:+//$MSGV_BRANCH}" "$@" >"$logdir/app.log" 2>&1 &
 app=$!
 sleep "${SHOT_DELAY:-4}"
+
+# The Shell starts in the overview; leave it so the window is in view.
+gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
+  --method org.gnome.Shell.Eval 'Main.overview.hide()' >/dev/null 2>&1 || true
+sleep 1
 
 gdbus call --session --dest org.gnome.Shell.Screenshot \
   --object-path /org/gnome/Shell/Screenshot \
