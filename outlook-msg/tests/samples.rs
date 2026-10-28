@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime};
 
-use outlook_msg::{Body, Error, Mailbox, Message, Recipient, RecipientKind};
+use outlook_msg::{Body, Error, Mailbox, Message, MessageKind, Recipient, RecipientKind};
 
 const PID_ATTACH_FILENAME: u16 = 0x3704;
 const CFB_MAGIC: &[u8] = &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
@@ -185,4 +185,78 @@ fn reads_unicode_plain_text_body() {
     let body = msg.plain_text_body().unwrap();
     assert!(body.contains("Thank you for using Microsoft® Office Outlook® 2003!"));
     assert!(body.contains("<http://r.office.microsoft.com/r/rlidwelcomeFAQ?clid=1033>"));
+}
+
+/// Asserts that a sample of another Message class has what the email view
+/// shows: a subject, a date and a plain-text Body.
+fn assert_other_class(name: &str, class: &str, subject: &str, body_start: &str) -> Message {
+    let msg = sample(name);
+    assert_eq!(msg.kind(), MessageKind::Other(class.to_owned()));
+    assert_eq!(msg.subject(), Some(subject));
+    assert!(msg.date().is_some());
+    assert!(msg.plain_text_body().unwrap().starts_with(body_start));
+    assert!(!msg.is_partial());
+    msg
+}
+
+#[test]
+fn ordinary_email_is_a_note() {
+    assert_eq!(sample("testMSG.msg").kind(), MessageKind::Note);
+}
+
+#[test]
+fn reads_appointment() {
+    let msg = assert_other_class(
+        "testMSG_Appointment.msg",
+        "IPM.Appointment",
+        "Quick brown fox",
+        "This is a meeting to discuss jumping",
+    );
+    assert_eq!(
+        msg.recipients(),
+        [to("Allison, Timothy B.", Some("tallison@mitre.org"))]
+    );
+}
+
+#[test]
+fn reads_contact_without_recipients() {
+    let msg = assert_other_class(
+        "testMSG_Contact.msg",
+        "IPM.Contact",
+        "Quick Brown Fox Jr",
+        "This was one quick brown fox.",
+    );
+    assert!(msg.recipients().is_empty());
+}
+
+#[test]
+fn reads_task() {
+    assert_other_class(
+        "testMSG_Task.msg",
+        "IPM.Task",
+        "Must jump over the lazy dog",
+        "Quick brown fox must do what he must",
+    );
+}
+
+#[test]
+fn reads_sticky_note_without_sender() {
+    let msg = assert_other_class(
+        "testMSG_StickyNote.msg",
+        "IPM.StickyNote",
+        "This is a note about the quick brown fox",
+        "This is a note about the quick brown fox",
+    );
+    assert_eq!(msg.sender(), None);
+    assert!(msg.recipients().is_empty());
+}
+
+#[test]
+fn reads_post() {
+    assert_other_class(
+        "testMSG_Post.msg",
+        "IPM.Post",
+        "QuickBrownFox",
+        "Is going to jump over the lazy brown dog!!!",
+    );
 }
