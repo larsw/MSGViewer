@@ -1,0 +1,43 @@
+#!/bin/sh
+# Builds and installs the Flatpak if the sources changed since the last
+# install, then runs it with the given files, e.g.
+#   build-aux/run outlook-msg/tests/samples/testMSG_att_msg.msg
+# Options: --build always rebuilds first; --no-build runs what is installed.
+# Files are handed over through the document portal, as Files does, since
+# the app has no filesystem access of its own.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+app=io.github.larsw.MSGViewer
+stamp=$root/.flatpak-builder/run-stamp
+
+build=auto
+case "${1:-}" in
+  --build) build=yes; shift ;;
+  --no-build) build=no; shift ;;
+esac
+
+if [ "$build" = auto ]; then
+  if [ ! -e "$stamp" ] || ! flatpak info --user "$app" >/dev/null 2>&1; then
+    build=yes
+  elif [ -n "$(cd "$root" && find . \
+      \( -path ./.git -o -path ./target -o -path ./_build -o -path ./.flatpak-builder \
+         -o -path ./repo -o -path ./tests/local -o -path ./outlook-msg/fuzz \) -prune \
+      -o -type f -newer "$stamp" -print -quit)" ]; then
+    build=yes
+  else
+    build=no
+  fi
+fi
+
+if [ "$build" = yes ]; then
+  echo "Building and installing $app…" >&2
+  (cd "$root" && flatpak run --user org.flatpak.Builder --user --install --force-clean \
+    --state-dir=.flatpak-builder _build build-aux/$app.json)
+  touch "$stamp"
+fi
+
+if [ $# -gt 0 ]; then
+  exec flatpak run --user --file-forwarding "$app" @@ "$@" @@
+else
+  exec flatpak run --user "$app"
+fi

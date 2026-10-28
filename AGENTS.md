@@ -21,6 +21,7 @@ The app crate needs GTK, libadwaita and WebKitGTK from the GNOME SDK, so build a
 - Lint and test: `build-aux/sdk-run cargo fmt --all --check`, `build-aux/sdk-run cargo clippy --workspace --all-targets -- -D warnings` and `build-aux/sdk-run cargo test --workspace`
 - Dependency licenses, advisories and duplicates: `cargo deny check` on the host (`cargo install --locked cargo-deny`). `deny.toml` holds the ADR-0002 license allowlist; a crate under any other license, GPL included, fails it
 - CI (`.github/workflows/ci.yml`) runs all of the above plus a Flatpak build on every push and pull request
+- Run the app: `build-aux/run [FILE.msg...]` rebuilds and reinstalls the Flatpak when sources changed since its last install (`--build` forces it, `--no-build` skips it), then opens the files through the document portal
 - Build and install the Flatpak: `flatpak run --user org.flatpak.Builder --user --install --force-clean --state-dir=.flatpak-builder _build build-aux/io.github.larsw.MSGViewer.json`
 - When several builds are in progress at once (for example in separate worktrees), add `--default-branch=<name>` to the Flatpak build so each installs side by side, and set `MSGV_BRANCH=<name>` for the screenshot script
 - See it running without touching the desktop: `build-aux/headless-screenshot OUT.png [FILE.msg...]` runs the installed Flatpak in a throwaway headless GNOME Shell and saves a screenshot
