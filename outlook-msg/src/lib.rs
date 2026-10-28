@@ -11,5 +11,5 @@ mod message;
 mod props;
 
 pub use error::Error;
-pub use message::{Mailbox, Message};
+pub use message::{Mailbox, Message, Recipient, RecipientKind};
 pub use props::{PropValue, Properties};
