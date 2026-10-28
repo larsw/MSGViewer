@@ -170,3 +170,17 @@ fn describe_parse_error(error: &outlook_msg::Error) -> &'static str {
         outlook_msg::Error::Damaged(_) => "The message is too damaged to be read.",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unreadable_file_reason_hides_parser_details() {
+        let error = Message::from_bytes(b"plain text").unwrap_err();
+        assert_eq!(
+            describe_parse_error(&error),
+            "This file isn’t an Outlook message."
+        );
+    }
+}
