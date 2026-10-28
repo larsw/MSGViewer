@@ -12,6 +12,11 @@ Every file here must be redistributable under terms compatible with Apache-2.0. 
 | `testMSG_att_doc.msg` | Apache Tika, same directory, `testMSG_att_doc.msg` (`main`, fetched 2026-10-28). Attachments with long and 8.3 names. | Apache-2.0 |
 | `testMSG_att_msg.msg` | Apache Tika, same directory, `testMSG_att_msg.msg` (`main`, fetched 2026-10-28). An Embedded message and a PDF. | Apache-2.0 |
 | `test-outlook2003.msg` | Apache Tika, same directory, `test-outlook2003.msg` (`main`, fetched 2026-10-28). Unicode plain-text Body; Inline attachments. | Apache-2.0 |
+| `testMSG_Appointment.msg` | Apache Tika, same directory, `testMSG_Appointment.msg` (`main`, fetched 2026-10-28). Message class `IPM.Appointment`. | Apache-2.0 |
+| `testMSG_Contact.msg` | Apache Tika, same directory, `testMSG_Contact.msg` (`main`, fetched 2026-10-28). Message class `IPM.Contact`; no recipients. | Apache-2.0 |
+| `testMSG_Task.msg` | Apache Tika, same directory, `testMSG_Task.msg` (`main`, fetched 2026-10-28). Message class `IPM.Task`. | Apache-2.0 |
+| `testMSG_StickyNote.msg` | Apache Tika, same directory, `testMSG_StickyNote.msg` (`main`, fetched 2026-10-28). Message class `IPM.StickyNote`; no sender. | Apache-2.0 |
+| `testMSG_Post.msg` | Apache Tika, same directory, `testMSG_Post.msg` (`main`, fetched 2026-10-28). Message class `IPM.Post`. | Apache-2.0 |
 | `attachment_msg_inlineImg.msg` | Apache POI, `test-data/hsmf/attachment_msg_inlineImg.msg` ([apache/poi](https://github.com/apache/poi), `trunk`, fetched 2026-10-28). Binary HTML Body declaring ISO-8859-1; Inline attachments referenced by `cid:` links. | Apache-2.0 |
 | `HTMLBodyBinary_CP1251.msg` | Apache POI, same directory, `HTMLBodyBinary_CP1251.msg` (`trunk`, fetched 2026-10-28). Binary HTML Body with a malformed `<meta charset>`, in the Internet codepage (1251). | Apache-2.0 |
 
@@ -19,6 +24,6 @@ Apache Tika is licensed Apache-2.0, and its `LICENSE.txt` lists no other terms f
 
 Apache POI is licensed Apache-2.0, and its `legal/LICENSE` lists no other terms for its test data.
 
-Edge cases (codepages, missing Properties, many recipients) are covered by small files that `tests/generated.rs` builds at test time rather than by checked-in samples.
+Edge cases (codepages, missing Properties, many recipients, signed and encrypted Messages) are covered by small files that `tests/generated.rs` builds at test time rather than by checked-in samples.
 
 Real `.msg` files for local testing go in `/tests/local/` at the repository root, which git ignores. Never commit them.
