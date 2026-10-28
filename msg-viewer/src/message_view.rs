@@ -64,6 +64,11 @@ impl MessageView {
         self.show_protection_notice(protection_notice(message));
     }
 
+    /// The Body, for finding text in it and zooming it.
+    pub fn body_view(&self) -> BodyView {
+        self.imp().body_view.get()
+    }
+
     /// Shows what a signed or encrypted Message needs, or hides the notices.
     /// Call it after setting the Attachments and Body, whose visibility it
     /// may change.

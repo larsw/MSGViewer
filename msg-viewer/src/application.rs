@@ -71,6 +71,16 @@ impl Application {
         self.set_accels_for_action("app.quit", &["<primary>q"]);
         self.set_accels_for_action("win.open", &["<primary>o"]);
         self.set_accels_for_action("window.close", &["<primary>w"]);
+        self.set_accels_for_action("win.find", &["<primary>f"]);
+        self.set_accels_for_action("win.find-next", &["<primary>g"]);
+        self.set_accels_for_action("win.find-previous", &["<primary><shift>g"]);
+        self.set_accels_for_action(
+            "win.zoom-in",
+            &["<primary>plus", "<primary>equal", "<primary>KP_Add"],
+        );
+        self.set_accels_for_action("win.zoom-out", &["<primary>minus", "<primary>KP_Subtract"]);
+        self.set_accels_for_action("win.zoom-reset", &["<primary>0", "<primary>KP_0"]);
+        // AdwApplication adds app.shortcuts (Ctrl+?) for shortcuts-dialog.ui.
     }
 
     fn show_about(&self) {
