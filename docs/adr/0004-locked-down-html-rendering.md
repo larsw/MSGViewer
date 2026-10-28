@@ -1,0 +1,3 @@
+# Bodies rendered in a locked-down WebKitGTK view
+
+Bodies are rendered in WebKitGTK 6 with JavaScript disabled. Links open in the external browser. Remote content is blocked until the reader allows it for the Message currently open, and that choice is never remembered (no trusted-sender list), so nothing is stored that could reveal which senders the reader trusts. Inline attachments are served locally through a custom URI scheme for `cid:` links, so they always show. HTML Bodies are drawn on a light "paper" surface even in dark mode, because email HTML assumes a white background; the rest of the window follows the system style. Plain-text-only rendering was rejected as useless for real business mail.

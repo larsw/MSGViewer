@@ -1,0 +1,3 @@
+# v1 is a read-only `.msg` viewer
+
+v1 only displays `.msg` files and saves or opens their Attachments. It does not edit, reply, send or connect to any mail account. `.oft` and `.eml` are out of scope even though `.oft` uses the same container format: other tools already handle `.eml`, and `.msg` is the gap. Ordinary emails (`IPM.Note`) are fully supported; every other Message class falls back to the email view. Genuine RTF Bodies fall back to the plain-text Body with a "formatting not shown" note, and an RTF-to-HTML converter waits until after v1. Printing comes first after v1, followed by "Export as .eml", a Files thumbnailer, a debug view of raw Properties, and translations.

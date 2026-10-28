@@ -1,0 +1,6 @@
+/target/
+/_build/
+/.flatpak-builder/
+/repo/
+# Real .msg files for local testing only; never commit them
+/tests/local/
