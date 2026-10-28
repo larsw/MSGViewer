@@ -1,0 +1,75 @@
+using Gtk 4.0;
+using Adw 1;
+
+// Shown by AdwApplication's app.shortcuts action (Ctrl+?). Items with an
+// action name show the accelerators set in application.rs; zooming names
+// just the main one of its several.
+Adw.ShortcutsDialog shortcuts_dialog {
+  Adw.ShortcutsSection {
+    title: _("General");
+
+    Adw.ShortcutsItem {
+      title: _("Open a Message");
+      action-name: "win.open";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Show Main Menu");
+      accelerator: "F10";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Show Keyboard Shortcuts");
+      action-name: "app.shortcuts";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Close Window");
+      action-name: "window.close";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Quit");
+      action-name: "app.quit";
+    }
+  }
+
+  Adw.ShortcutsSection {
+    title: _("Message");
+
+    Adw.ShortcutsItem {
+      title: _("Find");
+      action-name: "win.find";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Find Next");
+      action-name: "win.find-next";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Find Previous");
+      action-name: "win.find-previous";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Zoom In");
+      accelerator: "<Control>plus";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Zoom Out");
+      accelerator: "<Control>minus";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Reset Zoom");
+      accelerator: "<Control>0";
+    }
+
+    Adw.ShortcutsItem {
+      title: _("Save All Attachments");
+      accelerator: "<Control><Shift>s";
+    }
+  }
+}

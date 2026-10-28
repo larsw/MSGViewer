@@ -91,7 +91,12 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for HeaderBlock {}
+    impl WidgetImpl for HeaderBlock {
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.obj().fit_recipients(width);
+            self.parent_size_allocate(width, height, baseline);
+        }
+    }
     impl BoxImpl for HeaderBlock {}
 }
 
@@ -168,6 +173,27 @@ impl HeaderBlock {
         }
     }
 
+    /// Turns the recipients' scrollbar on only while they are taller than
+    /// the scrolled window's maximum at `width`. A scrolled window that may
+    /// show a vertical scrollbar is never shorter than the scrollbar, which
+    /// would leave a gap below one or two recipient lines. `External` still
+    /// scrolls and keeps the minimum height small, unlike `Never`.
+    fn fit_recipients(&self, width: i32) {
+        let window = &self.imp().recipient_lines;
+        let Some(content) = window.child() else {
+            return;
+        };
+        let (_, height, _, _) = content.measure(gtk::Orientation::Vertical, width);
+        let policy = if fits(height, window.max_content_height()) {
+            gtk::PolicyType::External
+        } else {
+            gtk::PolicyType::Automatic
+        };
+        if window.vscrollbar_policy() != policy {
+            window.set_vscrollbar_policy(policy);
+        }
+    }
+
     fn toggle_expanded(&self, kind: RecipientKind) {
         let mut expanded = self.imp().expanded.get();
         expanded[index(kind)] ^= true;
@@ -218,6 +244,12 @@ fn shown_recipients(recipients: &[String], expanded: bool) -> &[String] {
 
 fn collapsible(recipients: &[String]) -> bool {
     recipients.len() > COLLAPSED_COUNT + 1
+}
+
+/// Whether content `height` fits a scrolled window's `max_height`, where -1
+/// means no maximum.
+fn fits(height: i32, max_height: i32) -> bool {
+    max_height < 0 || height <= max_height
 }
 
 /// What kind of item a Message of another Message class is, in words, or
@@ -344,6 +376,13 @@ mod tests {
         assert_eq!(shown_recipients(&recipients, true), recipients);
     }
 
+    #[test]
+    fn recipients_scroll_only_when_taller_than_the_maximum() {
+        assert!(fits(16, 200));
+        assert!(fits(200, 200));
+        assert!(!fits(201, 200));
+        assert!(fits(5_000, -1));
+    }
     #[test]
     fn names_other_message_classes() {
         assert_eq!(item_kind("IPM.Contact"), Some("Contact"));
