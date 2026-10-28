@@ -6,6 +6,7 @@ blueprints = custom_target(
     'ui/find_bar.blp',
     'ui/header_block.blp',
     'ui/message_view.blp',
+    'ui/preferences_dialog.blp',
     'ui/shortcuts_dialog.blp',
     'ui/window.blp',
   ),

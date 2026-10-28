@@ -7,6 +7,7 @@
     <file preprocess="xml-stripblanks">ui/attachment_strip.ui</file>
     <file preprocess="xml-stripblanks">ui/body_view.ui</file>
     <file preprocess="xml-stripblanks">ui/find_bar.ui</file>
+    <file preprocess="xml-stripblanks">ui/preferences_dialog.ui</file>
     <!-- AdwApplication loads these by name. -->
     <file alias="shortcuts-dialog.ui" preprocess="xml-stripblanks">ui/shortcuts_dialog.ui</file>
     <file>style.css</file>

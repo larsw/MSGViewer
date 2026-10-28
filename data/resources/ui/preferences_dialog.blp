@@ -1,0 +1,40 @@
+using Gtk 4.0;
+using Adw 1;
+
+translation-domain "msg-viewer";
+
+// Each row is bound to a key in GSettings (preferences_dialog.rs).
+template $MsgViewerPreferencesDialog: Adw.PreferencesDialog {
+  Adw.PreferencesPage {
+    Adw.PreferencesGroup {
+      title: _("Message Font");
+      description: _("Text that a message styles itself keeps its own font");
+
+      Adw.SwitchRow use_system_font_row {
+        title: _("Use System Font");
+      }
+
+      Adw.ActionRow font_row {
+        title: _("Font");
+        visible: bind use_system_font_row.active inverted;
+        activatable-widget: font_button;
+
+        [suffix]
+        FontDialogButton font_button {
+          valign: center;
+          level: font;
+          use-font: true;
+          use-size: true;
+
+          dialog: FontDialog {
+            title: _("Choose Message Font");
+          };
+        }
+      }
+
+      Adw.SwitchRow monospace_row {
+        title: _("Use Monospace Font for Plain-Text Messages");
+      }
+    }
+  }
+}

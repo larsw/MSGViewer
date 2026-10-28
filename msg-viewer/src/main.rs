@@ -9,7 +9,9 @@ mod find_bar;
 mod header_block;
 mod i18n;
 mod message_view;
+mod preferences_dialog;
 mod protection_notice;
+mod settings;
 mod window;
 
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};

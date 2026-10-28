@@ -1,11 +1,13 @@
 # Files with strings to translate, one per line. A test in
 # msg-viewer/src/i18n.rs fails when a file with marked strings is missing.
 data/io.github.larsw.MSGViewer.desktop.in
+data/io.github.larsw.MSGViewer.gschema.xml
 data/io.github.larsw.MSGViewer.metainfo.xml.in
 data/resources/ui/attachment_strip.blp
 data/resources/ui/body_view.blp
 data/resources/ui/find_bar.blp
 data/resources/ui/header_block.blp
+data/resources/ui/preferences_dialog.blp
 data/resources/ui/shortcuts_dialog.blp
 data/resources/ui/window.blp
 msg-viewer/src/application.rs
