@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    # The app crate links GTK 4, libadwaita and WebKitGTK, so lint and test
+    # inside the GNOME SDK, the same way build-aux/sdk-run does locally.
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+
+      # The runner creates the workspace and HOME as its own (non-root) user.
+      # flatpak run puts root in a user namespace where that user is not
+      # mapped, so cargo could not write target/ or ~/.cargo without this.
+      - name: Make the workspace and HOME writable inside the SDK sandbox
+        run: chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" "$HOME"
+
+      - name: Install the Rust SDK extension
+        run: flatpak install --system --noninteractive -y flathub org.freedesktop.Sdk.Extension.rust-stable//26.08
+
+      - name: Cache Cargo registry and build output
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/sdk
+          key: rust-gnome-51-${{ hashFiles('Cargo.lock') }}
+          restore-keys: rust-gnome-51-
+
+      - name: cargo fmt
+        run: build-aux/sdk-run cargo fmt --all --check
+
+      - name: cargo clippy
+        run: build-aux/sdk-run cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        run: build-aux/sdk-run cargo test --workspace
+
+  deny:
+    name: cargo-deny (${{ matrix.checks }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Licenses (ADR-0002), bans and sources are separate from advisories so
+        # a new RustSec advisory is reported on its own.
+        checks:
+          - advisories
+          - bans licenses sources
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check ${{ matrix.checks }}
+
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: build-aux/io.github.larsw.MSGViewer.json
+          bundle: msg-viewer.flatpak
+          # _build is skipped by the manifest's dir source, so the build
+          # directory is not copied into its own sources.
+          build-dir: _build

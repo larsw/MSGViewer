@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# Distributed only as a Flatpak (ADR-0005), never on crates.io.
+publish = false
 
 [dependencies]
 adw = { version = "0.9.2", package = "libadwaita", features = ["v1_8"] }

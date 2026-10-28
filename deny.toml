@@ -1,0 +1,50 @@
+# cargo-deny configuration: https://embarkstudios.github.io/cargo-deny/
+# Run locally with `cargo deny check`; CI runs the same command.
+
+[graph]
+# Check every feature so an optional dependency cannot slip past the gate.
+all-features = true
+
+[advisories]
+# Fail on any RustSec vulnerability, unsound or unmaintained crate, and on
+# yanked versions. Add an `ignore` entry with a reason only after review.
+yanked = "deny"
+ignore = []
+
+[licenses]
+# The allowlist from ADR-0002. GPL and other licenses not listed fail the build.
+# The LGPL GNOME libraries (GTK, libadwaita, WebKitGTK, ...) are dynamically
+# linked system libraries from the Flatpak runtime, not crates, so they are not
+# covered here; their Rust bindings (gtk4-rs and friends) are MIT.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  # Apache-2.0 plus the LLVM exception, which only grants extra permissions
+  # (used by target-lexicon, a build dependency of system-deps).
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+]
+confidence-threshold = 0.93
+# The allowlist is policy, so allowed licenses no current crate uses are fine.
+unused-allowed-license = "allow"
+
+[licenses.private]
+# Workspace crates are not published; their license is set in Cargo.toml.
+ignore = true
+
+[bans]
+# Duplicate versions are common in the gtk-rs build-dependency tree; report
+# them without failing the build.
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies between workspace crates have no version requirement.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
