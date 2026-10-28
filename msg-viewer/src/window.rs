@@ -15,6 +15,8 @@ mod imp {
     #[template(resource = "/io/github/larsw/MSGViewer/ui/window.ui")]
     pub struct Window {
         #[template_child]
+        pub partial_banner: TemplateChild<adw::Banner>,
+        #[template_child]
         pub stack: TemplateChild<gtk::Stack>,
         #[template_child]
         pub message_view: TemplateChild<MessageView>,
@@ -69,7 +71,11 @@ impl Window {
         glib::spawn_future_local(async move {
             match load_message(&file).await {
                 Ok(message) => win.show_message(&message),
-                Err(error) => win.show_error(&error),
+                Err(error) => {
+                    // Nothing is shown, so the next file can reuse this window.
+                    win.imp().file.replace(None);
+                    win.show_error(&error);
+                }
             }
         });
     }
@@ -79,12 +85,17 @@ impl Window {
         if let Some(subject) = message.subject() {
             self.set_title(Some(subject));
         }
+        for problem in message.problems() {
+            glib::g_debug!("msg-viewer", "Partial read: {problem}");
+        }
+        imp.partial_banner.set_revealed(message.is_partial());
         imp.message_view.set_message(message);
         imp.stack.set_visible_child_name("message");
     }
 
     fn show_error(&self, error: &str) {
         let imp = self.imp();
+        imp.partial_banner.set_revealed(false);
         imp.error_page.set_description(Some(error));
         imp.stack.set_visible_child_name("error");
     }
@@ -123,14 +134,39 @@ impl Window {
     }
 }
 
+/// Reads a Message, or says in plain words why the file is unreadable.
 async fn load_message(file: &gio::File) -> Result<Message, String> {
     let (bytes, _etag) = file
         .load_contents_future()
         .await
-        .map_err(|error| error.message().to_owned())?;
+        .map_err(|error| describe_load_error(&error))?;
     let bytes = bytes.to_vec();
     gio::spawn_blocking(move || Message::from_bytes(&bytes))
         .await
-        .map_err(|_| "The file could not be read".to_owned())?
-        .map_err(|error| error.to_string())
+        .map_err(|_| "The file couldn’t be read.".to_owned())?
+        .map_err(|error| {
+            glib::g_debug!("msg-viewer", "Unreadable file: {error}");
+            describe_parse_error(&error).to_owned()
+        })
+}
+
+fn describe_load_error(error: &glib::Error) -> String {
+    match error.kind::<gio::IOErrorEnum>() {
+        Some(gio::IOErrorEnum::NotFound) => "The file doesn’t exist anymore.".to_owned(),
+        Some(gio::IOErrorEnum::PermissionDenied) => {
+            "You don’t have permission to read the file.".to_owned()
+        }
+        Some(gio::IOErrorEnum::IsDirectory) => "This is a folder, not a file.".to_owned(),
+        _ => error.message().to_owned(),
+    }
+}
+
+fn describe_parse_error(error: &outlook_msg::Error) -> &'static str {
+    match error {
+        outlook_msg::Error::NotCompoundFile(_) => "This file isn’t an Outlook message.",
+        outlook_msg::Error::NotAMessage => {
+            "This file isn’t an Outlook message. It may be another kind of Office document."
+        }
+        outlook_msg::Error::Damaged(_) => "The message is too damaged to be read.",
+    }
 }
