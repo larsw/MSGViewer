@@ -6,8 +6,10 @@ use cfb::CompoundFile;
 use encoding_rs::Encoding;
 
 use crate::attachment::{self, Attachment};
+use crate::body;
 use crate::props::{DEFAULT_ENCODING, PROPERTIES_STREAM, Properties, StorageKind};
 use crate::reader::Reader;
+use crate::rtf::RtfBody;
 use crate::{Error, Limits, Problem};
 
 // Property IDs ([MS-OXPROPS]).
@@ -70,6 +72,8 @@ pub struct Message {
     props: Properties,
     recipients: Vec<Recipient>,
     attachments: Vec<Attachment>,
+    /// What the Compressed RTF holds, if the Body could come from it.
+    rtf: Option<RtfBody>,
     problems: Vec<Problem>,
 }
 
@@ -111,10 +115,12 @@ impl Message {
         };
         let recipients = read_recipients(&mut reader, props.encoding());
         let attachments = attachment::read_all(&mut reader, root, props.encoding());
+        let rtf = body::read_rtf(&mut reader, root, &props);
         Ok(Message {
             props,
             recipients,
             attachments,
+            rtf,
             problems: reader.into_problems(),
         })
     }
@@ -134,6 +140,11 @@ impl Message {
     /// All properties of the Message.
     pub fn properties(&self) -> &Properties {
         &self.props
+    }
+
+    /// What the Compressed RTF holds, if the Body could come from it.
+    pub(crate) fn rtf_body(&self) -> Option<&RtfBody> {
+        self.rtf.as_ref()
     }
 
     /// The Attachments, in the order the sender added them.

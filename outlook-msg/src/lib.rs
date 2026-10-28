@@ -30,6 +30,7 @@ mod limits;
 mod message;
 mod props;
 mod reader;
+mod rtf;
 
 pub use attachment::{Attachment, sanitize_file_name};
 pub use body::Body;

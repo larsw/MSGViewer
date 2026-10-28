@@ -113,7 +113,7 @@ fn missing_property_stream_is_partial() {
 }
 
 #[test]
-fn missing_html_body_falls_back_to_plain_text_body() {
+fn missing_html_body_falls_back_to_plain_text_body_of_genuine_rtf() {
     let bytes = sample("testMSG_chinese.msg");
     let html = Path::new("/__substg1.0_1013001E");
     let message = Message::from_bytes(&without_stream(&bytes, html)).unwrap();
@@ -121,7 +121,7 @@ fn missing_html_body_falls_back_to_plain_text_body() {
     assert_eq!(message.problems()[0].path, "/__substg1.0_1013001E");
     assert!(matches!(
         message.body(),
-        Some(outlook_msg::Body::PlainText(text)) if text.contains("Alfresco MSG format testing")
+        Some(outlook_msg::Body::GenuineRtf(text)) if text.contains("Alfresco MSG format testing")
     ));
 }
 
