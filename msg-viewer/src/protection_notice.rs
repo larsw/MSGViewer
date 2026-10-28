@@ -3,7 +3,10 @@
 
 use outlook_msg::{Message, MessageKind};
 
-/// A notice shown with a Message.
+use crate::i18n::gettext_noop;
+
+/// A notice shown with a Message. Its words are untranslated; pass them to
+/// `gettext`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProtectionNotice {
     /// A banner above the Message, which is shown as usual.
@@ -18,18 +21,21 @@ pub enum ProtectionNotice {
 
 const ENCRYPTED: ProtectionNotice = ProtectionNotice::Page {
     icon_name: "channel-secure-symbolic",
-    title: "This Message Is Encrypted",
-    description: "Only its recipients can read it, in a mail app that can decrypt it",
+    title: gettext_noop("This Message Is Encrypted"),
+    description: gettext_noop("Only its recipients can read it, in a mail app that can decrypt it"),
 };
 
 const SIGNED_CONTENT_HIDDEN: ProtectionNotice = ProtectionNotice::Page {
     icon_name: "application-certificate-symbolic",
-    title: "This Message Is Digitally Signed",
-    description: "Its signed content can only be shown in a mail app that supports signed email",
+    title: gettext_noop("This Message Is Digitally Signed"),
+    description: gettext_noop(
+        "Its signed content can only be shown in a mail app that supports signed email",
+    ),
 };
 
-const SIGNED: ProtectionNotice =
-    ProtectionNotice::Banner("This message is digitally signed, but its signature isn’t checked");
+const SIGNED: ProtectionNotice = ProtectionNotice::Banner(gettext_noop(
+    "This message is digitally signed, but its signature isn’t checked",
+));
 
 /// The notice to show with `message`, if it needs one.
 ///

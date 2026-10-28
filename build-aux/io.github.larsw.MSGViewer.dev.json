@@ -1,0 +1,35 @@
+{
+  "id": "io.github.larsw.MSGViewer",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "51",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "msg-viewer",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--share=network"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "build-args": ["--share=network"],
+    "env": {
+      "CARGO_HOME": "/run/build/msg-viewer/cargo"
+    }
+  },
+  "modules": [
+    {
+      "name": "msg-viewer",
+      "buildsystem": "meson",
+      "sources": [
+        {
+          "type": "dir",
+          "path": "..",
+          "skip": ["target", "_build", ".flatpak-builder", "repo", "tests/local", "outlook-msg/fuzz/target", "outlook-msg/fuzz/corpus", "outlook-msg/fuzz/artifacts"]
+        }
+      ]
+    }
+  ]
+}

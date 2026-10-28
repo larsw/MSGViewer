@@ -6,12 +6,15 @@ project(
 )
 
 gnome = import('gnome')
+i18n = import('i18n')
 
 application_id = 'io.github.larsw.MSGViewer'
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
+localedir = get_option('prefix') / get_option('localedir')
 
 subdir('data')
 subdir('msg-viewer')
+subdir('po')
 
 gnome.post_install(
   gtk_update_icon_cache: true,
