@@ -24,6 +24,7 @@
 mod attachment;
 mod body;
 mod error;
+mod kind;
 mod limits;
 mod message;
 mod props;
@@ -32,6 +33,7 @@ mod reader;
 pub use attachment::{Attachment, sanitize_file_name};
 pub use body::Body;
 pub use error::Error;
+pub use kind::MessageKind;
 pub use limits::Limits;
 pub use message::{Mailbox, Message, Recipient, RecipientKind};
 pub use props::{PropValue, Properties};
