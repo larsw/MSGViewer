@@ -438,7 +438,6 @@ fn locked_down_settings() -> webkit6::Settings {
     settings.set_enable_fullscreen(false);
     settings.set_enable_site_specific_quirks(false);
     settings.set_enable_dns_prefetching(false);
-    settings.set_enable_hyperlink_auditing(false);
     if let Some(features) = webkit6::Settings::all_features() {
         for feature in (0..features.length()).filter_map(|i| features.get(i)) {
             let identifier = feature.identifier().unwrap_or_default();
