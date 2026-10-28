@@ -222,7 +222,7 @@ fn mutate(bytes: &mut Vec<u8>, rng: &mut Rng) {
 #[test]
 fn many_mutations_never_panic() {
     let original = sample_bytes();
-    let mut rng = Rng(0x5EED_0F_0A11_C0DE);
+    let mut rng = Rng(0x5EED_F00D_0A11_C0DE);
     let small_limits = Limits {
         max_stream_len: 4096,
         max_total_read: 16 * 1024,

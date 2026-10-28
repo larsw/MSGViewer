@@ -1,0 +1,32 @@
+[package]
+name = "outlook-msg-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1.4.2", features = ["derive"] }
+cfb = "0.15.0"
+libfuzzer-sys = "0.4.13"
+outlook-msg = { path = ".." }
+
+# Kept out of the main workspace: it needs a nightly toolchain.
+[workspace]
+
+[[bin]]
+name = "from_bytes"
+path = "fuzz_targets/from_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "from_parts"
+path = "fuzz_targets/from_parts.rs"
+test = false
+doc = false
+bench = false

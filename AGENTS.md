@@ -23,4 +23,10 @@ The app crate needs GTK, libadwaita and WebKitGTK from the GNOME SDK, so build a
 - When several builds are in progress at once (for example in separate worktrees), add `--default-branch=<name>` to the Flatpak build so each installs side by side, and set `MSGV_BRANCH=<name>` for the screenshot script
 - See it running without touching the desktop: `build-aux/headless-screenshot OUT.png [FILE.msg...]` runs the installed Flatpak in a throwaway headless GNOME Shell and saves a screenshot
 
+The parser is fuzzed on the host with `cargo-fuzz`, which needs a nightly toolchain (`rustup toolchain install nightly`, `cargo install cargo-fuzz`). The fuzz crate in `outlook-msg/fuzz/` is outside the workspace. From `outlook-msg/`:
+
+- Raw bytes, seeded with the samples: `cargo +nightly fuzz run -O from_bytes fuzz/corpus/from_bytes tests/samples -- -dict=fuzz/msg.dict -max_len=65536 -max_total_time=600`
+- Well-formed compound files built from arbitrary Message parts, which reach the property parsing: `cargo +nightly fuzz run -O from_parts fuzz/corpus/from_parts -- -max_total_time=600`
+- Add a regression test to `outlook-msg/tests/damaged.rs` for every crash found
+
 Sample `.msg` files live in `outlook-msg/tests/samples/`, with their source and license recorded in `SOURCES.md` there.

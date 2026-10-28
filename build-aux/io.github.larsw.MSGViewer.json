@@ -27,7 +27,7 @@
         {
           "type": "dir",
           "path": "..",
-          "skip": ["target", "_build", ".flatpak-builder", "repo", "tests/local"]
+          "skip": ["target", "_build", ".flatpak-builder", "repo", "tests/local", "outlook-msg/fuzz/target", "outlook-msg/fuzz/corpus", "outlook-msg/fuzz/artifacts"]
         }
       ]
     }
