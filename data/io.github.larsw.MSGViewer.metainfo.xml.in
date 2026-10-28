@@ -14,6 +14,7 @@
     </p>
     <ul>
       <li>Shows the subject, sender, date and recipients, then the message itself</li>
+      <li>Reads messages that Outlook stores as rich text (RTF), showing those written in rich text as plain text</li>
       <li>Blocks remote images and other remote content unless you load them for the message you’re reading</li>
       <li>Opens attachments in other apps or saves them, one by one or all at once, and warns before opening files that can run programs</li>
       <li>Opens messages attached to a message in a window of their own</li>

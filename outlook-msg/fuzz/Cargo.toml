@@ -30,3 +30,10 @@ path = "fuzz_targets/from_parts.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "rtf_body"
+path = "fuzz_targets/rtf_body.rs"
+test = false
+doc = false
+bench = false

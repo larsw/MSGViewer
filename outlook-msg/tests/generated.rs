@@ -397,7 +397,7 @@ fn sender_ignores_non_smtp_email() {
 fn html_body(props: Props) -> Option<String> {
     match read(&props, &[]).body()? {
         Body::Html(html) => Some(html),
-        Body::PlainText(_) => None,
+        _ => None,
     }
 }
 

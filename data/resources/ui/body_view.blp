@@ -17,6 +17,37 @@ template $MsgViewerBodyView: Box {
     action-name: "body.load-remote-content";
   }
 
+  // Shown only for Genuine RTF, which is shown as plain text (ADR-0006).
+  Box formatting_note {
+    visible: false;
+    spacing: 6;
+    margin-top: 6;
+    margin-bottom: 6;
+    margin-start: 18;
+    margin-end: 18;
+
+    styles [
+      "dim-label",
+    ]
+
+    Image {
+      icon-name: "dialog-information-symbolic";
+      accessible-role: presentation;
+    }
+
+    Label {
+      // Translators: Shown above a message written in rich text (RTF),
+      // whose text is shown without its formatting.
+      label: _("Formatting not shown");
+      xalign: 0;
+      wrap: true;
+
+      styles [
+        "caption",
+      ]
+    }
+  }
+
   WebKit.WebView web_view {
     vexpand: true;
 
