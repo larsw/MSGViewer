@@ -91,6 +91,11 @@ impl BodyView {
     pub fn set_message(&self, message: &Message) {
         match message.body() {
             Some(Body::PlainText(text)) => self.load(&plain_text::to_html(&text), Surface::System),
+            // Not shown until Remote content can be blocked.
+            Some(Body::Html(_)) => {
+                let text = message.plain_text_body().unwrap_or_default();
+                self.load(&plain_text::to_html(text), Surface::System);
+            }
             None => self.load("", Surface::System),
         }
     }

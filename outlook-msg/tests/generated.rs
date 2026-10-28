@@ -5,7 +5,7 @@ use std::io::{Cursor, Write};
 use std::time::{Duration, SystemTime};
 
 use cfb::CompoundFile;
-use outlook_msg::{Mailbox, Message, Recipient, RecipientKind};
+use outlook_msg::{Body, Mailbox, Message, Recipient, RecipientKind};
 
 const PID_SUBJECT: u16 = 0x0037;
 const PID_CLIENT_SUBMIT_TIME: u16 = 0x0039;
@@ -14,6 +14,8 @@ const PID_SENDER_NAME: u16 = 0x0C1A;
 const PID_SENDER_ADDRTYPE: u16 = 0x0C1E;
 const PID_SENDER_EMAIL: u16 = 0x0C1F;
 const PID_MESSAGE_DELIVERY_TIME: u16 = 0x0E06;
+const PID_BODY: u16 = 0x1000;
+const PID_HTML: u16 = 0x1013;
 const PID_DISPLAY_NAME: u16 = 0x3001;
 const PID_ADDRTYPE: u16 = 0x3002;
 const PID_EMAIL_ADDRESS: u16 = 0x3003;
@@ -34,6 +36,7 @@ enum Value {
     Time(u64),
     String8(Vec<u8>),
     Unicode(String),
+    Binary(Vec<u8>),
 }
 
 type Props = Vec<(u16, Value)>;
@@ -84,6 +87,11 @@ fn write_storage(
                     Some(data),
                 )
             }
+            Value::Binary(data) => (
+                0x0102,
+                widen(&(data.len() as u32).to_le_bytes()),
+                Some(data.clone()),
+            ),
             Value::Unicode(s) => {
                 let mut data: Vec<u8> = s.encode_utf16().flat_map(u16::to_le_bytes).collect();
                 data.extend_from_slice(&[0, 0]);
@@ -383,6 +391,114 @@ fn sender_ignores_non_smtp_email() {
             name: Some("Ada".into()),
             address: None,
         })
+    );
+}
+
+fn html_body(props: Props) -> Option<String> {
+    match read(&props, &[]).body()? {
+        Body::Html(html) => Some(html),
+        Body::PlainText(_) => None,
+    }
+}
+
+#[test]
+fn html_body_is_preferred_over_plain_text() {
+    let msg = read(
+        &vec![
+            (PID_BODY, unicode("Plain")),
+            (PID_HTML, Value::Binary(b"<p>Rich</p>".to_vec())),
+        ],
+        &[],
+    );
+    assert_eq!(msg.body(), Some(Body::Html("<p>Rich</p>".into())));
+    assert_eq!(msg.plain_text_body(), Some("Plain"));
+}
+
+#[test]
+fn empty_html_body_falls_back_to_plain_text() {
+    let msg = read(
+        &vec![
+            (PID_BODY, unicode("Plain")),
+            (PID_HTML, Value::Binary(b" \r\n\0".to_vec())),
+        ],
+        &[],
+    );
+    assert_eq!(msg.body(), Some(Body::PlainText("Plain".into())));
+}
+
+#[test]
+fn html_body_charset_comes_from_meta_first() {
+    let html = b"<html><head><meta http-equiv=\"Content-Type\" \
+                 content=\"text/html; charset=windows-1251\"></head>\
+                 <body>\xcf\xf0\xe8\xe2\xe5\xf2</body></html>";
+    assert_eq!(
+        html_body(vec![
+            (PID_INTERNET_CODEPAGE, Value::Long(932)),
+            (PID_MESSAGE_CODEPAGE, Value::Long(1252)),
+            (PID_HTML, Value::Binary(html.to_vec())),
+        ])
+        .unwrap(),
+        "<html><head><meta http-equiv=\"Content-Type\" \
+         content=\"text/html; charset=windows-1251\"></head>\
+         <body>Привет</body></html>"
+    );
+}
+
+#[test]
+fn html_body_charset_falls_back_to_internet_then_message_codepage() {
+    let html = || Value::Binary(b"<p>\x8e\x52\x93\x63</p>\0".to_vec());
+    assert_eq!(
+        html_body(vec![
+            (PID_INTERNET_CODEPAGE, Value::Long(932)),
+            (PID_MESSAGE_CODEPAGE, Value::Long(1252)),
+            (PID_HTML, html()),
+        ]),
+        Some("<p>山田</p>".into())
+    );
+    assert_eq!(
+        html_body(vec![
+            (PID_INTERNET_CODEPAGE, Value::Long(1200)),
+            (PID_MESSAGE_CODEPAGE, Value::Long(932)),
+            (PID_HTML, html()),
+        ]),
+        Some("<p>山田</p>".into())
+    );
+    assert_eq!(
+        html_body(vec![(PID_HTML, html())]),
+        Some("<p>\u{17d}R\u{201c}c</p>".into())
+    );
+}
+
+#[test]
+fn string8_html_body_ignores_message_codepage_when_meta_says_otherwise() {
+    // 8-bit string Properties use the Message codepage, but the HTML Body
+    // declares its own charset.
+    let msg = read(
+        &vec![
+            (PID_MESSAGE_CODEPAGE, Value::Long(1251)),
+            (PID_SUBJECT, string8(b"\xcf\xf0\xe8\xe2\xe5\xf2")),
+            (
+                PID_HTML,
+                string8(b"<meta charset=\"utf-8\"><p>Gr\xc3\xbc\xc3\x9fe</p>"),
+            ),
+        ],
+        &[],
+    );
+    assert_eq!(msg.subject(), Some("Привет"));
+    assert_eq!(
+        msg.body(),
+        Some(Body::Html("<meta charset=\"utf-8\"><p>Grüße</p>".into()))
+    );
+}
+
+#[test]
+fn unicode_html_body_ignores_its_meta_charset() {
+    assert_eq!(
+        html_body(vec![(
+            PID_HTML,
+            unicode("<meta charset=\"big5\"><p>Grüße, 世界</p>")
+        )]),
+        Some("<meta charset=\"big5\"><p>Grüße, 世界</p>".into())
     );
 }
 

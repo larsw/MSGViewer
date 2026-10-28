@@ -186,3 +186,44 @@ fn reads_unicode_plain_text_body() {
     assert!(body.contains("Thank you for using Microsoft® Office Outlook® 2003!"));
     assert!(body.contains("<http://r.office.microsoft.com/r/rlidwelcomeFAQ?clid=1033>"));
 }
+
+#[test]
+fn reads_string8_html_body_in_its_meta_charset() {
+    // PT_STRING8 HTML in Big5, as its <meta http-equiv> says; the Internet
+    // codepage (950) agrees.
+    let msg = sample("testMSG_chinese.msg");
+    let Some(Body::Html(html)) = msg.body() else {
+        panic!("expected an HTML Body");
+    };
+    assert!(html.starts_with("<!DOCTYPE HTML PUBLIC"));
+    assert!(html.contains("<TITLE>Alfresco MSG format testing ( MSG 格式測試 )</TITLE>"));
+    assert!(html.contains("FACE=\"新細明體\""));
+    assert!(html.ends_with("</HTML>"));
+}
+
+#[test]
+fn reads_binary_html_body_in_its_meta_charset() {
+    // Binary HTML declaring ISO-8859-1; the Message codepage is 1252.
+    let msg = sample("attachment_msg_inlineImg.msg");
+    let Some(Body::Html(html)) = msg.body() else {
+        panic!("expected an HTML Body");
+    };
+    assert!(html.contains("charset=iso-8859-1"));
+    assert!(html.contains("adb root\u{a0} \u{a0}\u{a0}("));
+    assert!(html.contains("src=\"cid:image001.png@01D0A524.96D40F30\""));
+    assert!(html.ends_with("</body></html>"));
+}
+
+#[test]
+fn html_body_without_usable_meta_uses_internet_codepage() {
+    // Its <meta charset=\"utf-8\"> is malformed, so the Internet codepage
+    // (1251) applies.
+    let msg = sample("HTMLBodyBinary_CP1251.msg");
+    assert_eq!(
+        msg.body(),
+        Some(Body::Html(
+            "<!DOCTYPE html><html><meta charset=\\\"utf-8\\\"><body>HTML автоматически</body></html>"
+                .into()
+        ))
+    );
+}

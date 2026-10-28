@@ -113,6 +113,19 @@ fn missing_property_stream_is_partial() {
 }
 
 #[test]
+fn missing_html_body_falls_back_to_plain_text_body() {
+    let bytes = sample("testMSG_chinese.msg");
+    let html = Path::new("/__substg1.0_1013001E");
+    let message = Message::from_bytes(&without_stream(&bytes, html)).unwrap();
+    assert!(message.is_partial());
+    assert_eq!(message.problems()[0].path, "/__substg1.0_1013001E");
+    assert!(matches!(
+        message.body(),
+        Some(outlook_msg::Body::PlainText(text)) if text.contains("Alfresco MSG format testing")
+    ));
+}
+
+#[test]
 fn each_missing_root_stream_gives_partial_read_or_unreadable_file() {
     let bytes = sample_bytes();
     for stream in root_streams(&bytes) {
