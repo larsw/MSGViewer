@@ -1,4 +1,5 @@
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::glib;
 use gtk::prelude::*;
 use outlook_msg::Message;
@@ -78,7 +79,8 @@ impl MessageView {
             Some(ProtectionNotice::Banner(title)) => Some(title),
             _ => None,
         };
-        imp.protection_banner.set_title(banner.unwrap_or_default());
+        imp.protection_banner
+            .set_title(&banner.map(gettext).unwrap_or_default());
         imp.protection_banner.set_revealed(banner.is_some());
 
         let page = match notice {
@@ -88,8 +90,9 @@ impl MessageView {
                 description,
             }) => {
                 imp.protection_page.set_icon_name(Some(icon_name));
-                imp.protection_page.set_title(title);
-                imp.protection_page.set_description(Some(description));
+                imp.protection_page.set_title(&gettext(title));
+                imp.protection_page
+                    .set_description(Some(&gettext(description)));
                 true
             }
             _ => false,

@@ -2,6 +2,7 @@
 //! portal. Names given here must already be safe file names
 //! (`Attachment::safe_file_name`).
 
+use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
@@ -41,7 +42,8 @@ async fn save_as_new_file(
         if !file.has_parent(Some(folder)) {
             return Err(glib::Error::new(
                 gio::IOErrorEnum::InvalidFilename,
-                &format!("“{name}” is not a valid file name"),
+                // Translators: {name} is the Attachment's file name.
+                &gettext("“{name}” is not a valid file name").replace("{name}", name),
             ));
         }
         // Creating fails if the file exists, without a window for a race.
@@ -62,7 +64,8 @@ async fn save_as_new_file(
     }
     Err(glib::Error::new(
         gio::IOErrorEnum::Exists,
-        &format!("Too many files named like “{name}” already exist"),
+        // Translators: {name} is the Attachment's file name.
+        &gettext("Too many files named like “{name}” already exist").replace("{name}", name),
     ))
 }
 

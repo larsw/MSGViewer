@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gettextrs::{gettext, ngettext};
 use gtk::{gio, glib};
 use outlook_msg::{Attachment, Message};
 
@@ -107,10 +108,11 @@ impl AttachmentStrip {
         for (index, attachment) in attachments.iter().enumerate() {
             imp.chips.append(&chip(self, attachment, index as u32));
         }
-        imp.count.set_label(&match attachments.len() {
-            1 => "1 Attachment".to_owned(),
-            n => format!("{n} Attachments"),
-        });
+        let count = attachments.len();
+        imp.count.set_label(
+            &ngettext("{count} Attachment", "{count} Attachments", count as u32)
+                .replace("{count}", &count.to_string()),
+        );
         self.set_visible(!attachments.is_empty());
         self.action_set_enabled(
             "attachments.save-all",
@@ -177,7 +179,7 @@ impl AttachmentStrip {
             Err(error)
                 if error.matches(gtk::DialogError::Dismissed)
                     || error.matches(gtk::DialogError::Cancelled) => {}
-            Err(error) => self.show_error("Could Not Open Attachment", &error),
+            Err(error) => self.show_error(&gettext("Could Not Open Attachment"), &error),
         }
     }
 
@@ -199,13 +201,20 @@ impl AttachmentStrip {
     /// whether the reader still wants to open it.
     async fn confirm_risky(&self, name: &str) -> bool {
         let dialog = adw::AlertDialog::new(
-            Some("Open Risky Attachment?"),
-            Some(&format!(
-                "“{name}” is a kind of file that can run programs or change your computer \
-                 when opened. Only open it if you trust the sender and expected this file."
-            )),
+            Some(&gettext("Open Risky Attachment?")),
+            Some(
+                // Translators: {name} is the Attachment's file name.
+                &gettext(
+                    "“{name}” is a kind of file that can run programs or change your computer \
+                     when opened. Only open it if you trust the sender and expected this file.",
+                )
+                .replace("{name}", name),
+            ),
         );
-        dialog.add_responses(&[("cancel", "_Cancel"), ("open", "_Open Anyway")]);
+        dialog.add_responses(&[
+            ("cancel", &gettext("_Cancel")),
+            ("open", &gettext("_Open Anyway")),
+        ]);
         dialog.set_response_appearance("open", adw::ResponseAppearance::Destructive);
         dialog.set_default_response(Some("cancel"));
         dialog.set_close_response("cancel");
@@ -224,7 +233,7 @@ impl AttachmentStrip {
             return;
         };
         let dialog = gtk::FileDialog::builder()
-            .title("Save Attachment")
+            .title(gettext("Save Attachment"))
             .modal(true)
             .initial_name(name)
             .build();
@@ -232,15 +241,15 @@ impl AttachmentStrip {
             return;
         };
         if let Err(error) = attachment_save::save_to_file(&file, data).await {
-            self.show_error("Could Not Save Attachment", &error);
+            self.show_error(&gettext("Could Not Save Attachment"), &error);
         }
     }
 
     /// Asks for a folder and saves every Attachment into it.
     async fn save_all(&self) {
         let dialog = gtk::FileDialog::builder()
-            .title("Save All Attachments")
-            .accept_label("_Save")
+            .title(gettext("Save All Attachments"))
+            .accept_label(gettext("_Save"))
             .modal(true)
             .build();
         let Some(folder) = choose(dialog.select_folder_future(self.window().as_ref()).await) else {
@@ -249,7 +258,7 @@ impl AttachmentStrip {
         // The action is only enabled while some Attachment has data.
         let attachments = self.savable();
         if let Err(error) = attachment_save::save_into_folder(&folder, &attachments).await {
-            self.show_error("Could Not Save Attachments", &error);
+            self.show_error(&gettext("Could Not Save Attachments"), &error);
         }
     }
 
@@ -272,7 +281,7 @@ impl AttachmentStrip {
 
     fn show_error(&self, heading: &str, error: &glib::Error) {
         let dialog = adw::AlertDialog::new(Some(heading), Some(error.message()));
-        dialog.add_response("close", "_Close");
+        dialog.add_response("close", &gettext("_Close"));
         dialog.present(Some(self));
     }
 }
@@ -321,10 +330,10 @@ fn chip(strip: &AttachmentStrip, attachment: &Attachment, index: u32) -> gtk::Fl
     content.append(&labels);
 
     let menu = gio::Menu::new();
-    let open = gio::MenuItem::new(Some("_Open"), None);
+    let open = gio::MenuItem::new(Some(&gettext("_Open")), None);
     open.set_action_and_target_value(Some("attachments.open"), Some(&index.to_variant()));
     menu.append_item(&open);
-    let save = gio::MenuItem::new(Some("_Save…"), None);
+    let save = gio::MenuItem::new(Some(&gettext("_Save…")), None);
     save.set_action_and_target_value(Some("attachments.save"), Some(&index.to_variant()));
     menu.append_item(&save);
     let popover = gtk::PopoverMenu::from_model(Some(&menu));
@@ -335,7 +344,12 @@ fn chip(strip: &AttachmentStrip, attachment: &Attachment, index: u32) -> gtk::Fl
         .build();
     let accessible_label = match size.as_str() {
         "" => name.clone(),
-        size => format!("{name}, {size}"),
+        // Translators: How screen readers name an Attachment, e.g.
+        // "report.pdf, 1.2 MB".
+        size => gettext("{name}, {size}")
+            // The name could contain "{size}", so it goes in last.
+            .replace("{size}", size)
+            .replace("{name}", &name),
     };
     button.update_property(&[
         gtk::accessible::Property::Label(&accessible_label),
@@ -355,10 +369,14 @@ fn chip(strip: &AttachmentStrip, attachment: &Attachment, index: u32) -> gtk::Fl
     if attachment.data().is_none() {
         button.set_sensitive(false);
         let reason = if attachment.is_embedded_message() {
-            format!("{name} couldn’t be read")
+            // Translators: {name} is the name of a message attached to the
+            // message shown.
+            gettext("{name} couldn’t be read")
         } else {
-            format!("{name} can’t be saved")
-        };
+            // Translators: {name} is the Attachment's file name.
+            gettext("{name} can’t be saved")
+        }
+        .replace("{name}", &name);
         button.set_tooltip_text(Some(&reason));
     }
 

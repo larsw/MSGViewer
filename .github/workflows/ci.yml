@@ -54,6 +54,11 @@ jobs:
       - name: cargo test
         run: build-aux/sdk-run cargo test --workspace
 
+      - name: Validate the desktop file and metainfo
+        run: |
+          build-aux/sdk-run meson setup target/meson
+          build-aux/sdk-run meson test -C target/meson validate-desktop validate-metainfo
+
   deny:
     name: cargo-deny (${{ matrix.checks }})
     runs-on: ubuntu-latest
@@ -71,6 +76,15 @@ jobs:
         with:
           command: check ${{ matrix.checks }}
 
+  cargo-sources:
+    name: cargo-sources.json matches Cargo.lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Regenerate and compare
+        run: build-aux/update-cargo-sources --check
+
   flatpak:
     name: Flatpak
     runs-on: ubuntu-latest
@@ -79,6 +93,8 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v7
+      # The Flathub manifest: a release build without network access, with
+      # the crates from build-aux/cargo-sources.json, as Flathub builds it.
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: build-aux/io.github.larsw.MSGViewer.json
