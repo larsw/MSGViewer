@@ -6,6 +6,7 @@ use cfb::CompoundFile;
 use encoding_rs::Encoding;
 
 use crate::Error;
+use crate::attachment::{self, Attachment};
 use crate::props::{DEFAULT_ENCODING, PROPERTIES_STREAM, Properties, StorageKind};
 
 // Property IDs ([MS-OXPROPS]).
@@ -66,6 +67,7 @@ pub struct Recipient {
 pub struct Message {
     props: Properties,
     recipients: Vec<Recipient>,
+    attachments: Vec<Attachment>,
 }
 
 impl Message {
@@ -82,12 +84,22 @@ impl Message {
             DEFAULT_ENCODING,
         )?;
         let recipients = read_recipients(&mut file, props.encoding())?;
-        Ok(Message { props, recipients })
+        let attachments = attachment::read_all(&mut file, root, props.encoding())?;
+        Ok(Message {
+            props,
+            recipients,
+            attachments,
+        })
     }
 
     /// All properties of the Message.
     pub fn properties(&self) -> &Properties {
         &self.props
+    }
+
+    /// The Attachments, in the order the sender added them.
+    pub fn attachments(&self) -> &[Attachment] {
+        &self.attachments
     }
 
     /// The Message class, e.g. `IPM.Note`.

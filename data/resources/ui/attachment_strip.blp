@@ -1,0 +1,59 @@
+using Gtk 4.0;
+
+template $MsgViewerAttachmentStrip: Box {
+  orientation: vertical;
+  spacing: 6;
+  margin-bottom: 12;
+  margin-start: 18;
+  margin-end: 18;
+  // Shown once a Message with Attachments is set.
+  visible: false;
+
+  Box {
+    spacing: 6;
+
+    Label count {
+      xalign: 0;
+      hexpand: true;
+      ellipsize: end;
+
+      styles [
+        "heading",
+      ]
+    }
+
+    Button {
+      label: _("Save _All…");
+      use-underline: true;
+      action-name: "attachments.save-all";
+    }
+  }
+
+  // Many Attachments scroll rather than push the Body out of view.
+  ScrolledWindow {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+    max-content-height: 180;
+
+    FlowBox chips {
+      // Chips keep their natural width instead of spreading across the line.
+      halign: start;
+      valign: start;
+      selection-mode: none;
+      homogeneous: false;
+      min-children-per-line: 1;
+      max-children-per-line: 12;
+      column-spacing: 6;
+      row-spacing: 6;
+    }
+  }
+
+  ShortcutController {
+    scope: global;
+
+    Shortcut {
+      trigger: "<Control><Shift>s";
+      action: "action(attachments.save-all)";
+    }
+  }
+}
