@@ -21,7 +21,6 @@ pub(crate) enum StorageKind {
     TopLevelMessage,
     #[allow(dead_code)]
     EmbeddedMessage,
-    #[allow(dead_code)]
     RecipientOrAttachment,
 }
 

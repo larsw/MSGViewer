@@ -4,6 +4,7 @@ use std::path::Path;
 use cfb::CompoundFile;
 
 use crate::Error;
+use crate::attachment::{self, Attachment};
 use crate::props::{PROPERTIES_STREAM, Properties, StorageKind};
 
 // Property IDs ([MS-OXPROPS]).
@@ -30,6 +31,7 @@ pub struct Mailbox {
 #[derive(Clone, Debug)]
 pub struct Message {
     props: Properties,
+    attachments: Vec<Attachment>,
 }
 
 impl Message {
@@ -40,12 +42,18 @@ impl Message {
             return Err(Error::NotAMessage);
         }
         let props = Properties::read(&mut file, root, StorageKind::TopLevelMessage)?;
-        Ok(Message { props })
+        let attachments = attachment::read_all(&mut file, root)?;
+        Ok(Message { props, attachments })
     }
 
     /// All properties of the Message.
     pub fn properties(&self) -> &Properties {
         &self.props
+    }
+
+    /// The Attachments, in the order the sender added them.
+    pub fn attachments(&self) -> &[Attachment] {
+        &self.attachments
     }
 
     /// The Message class, e.g. `IPM.Note`.

@@ -6,10 +6,12 @@
 //!
 //! [MS-OXMSG]: https://learn.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-oxmsg/
 
+mod attachment;
 mod error;
 mod message;
 mod props;
 
+pub use attachment::{Attachment, sanitize_file_name};
 pub use error::Error;
 pub use message::{Mailbox, Message};
 pub use props::{PropValue, Properties};
