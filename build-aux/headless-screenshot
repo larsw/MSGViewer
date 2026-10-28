@@ -6,6 +6,8 @@
 # portal can't be mounted inside the nested session.
 # Set SHOT_DELAY (seconds, default 4) for slower startups, and MSGV_BRANCH to run
 # a build installed with flatpak-builder --default-branch=<branch>.
+# Showing a Body needs SHOT_DELAY=40: the nested session's portal takes 25 s to
+# start (its org.freedesktop.secrets lookup times out), and WebKit waits for it.
 set -eu
 if [ -z "${DBUS_SESSION_BUS_ADDRESS_HEADLESS:-}" ]; then
   DBUS_SESSION_BUS_ADDRESS_HEADLESS=1 exec timeout 120 dbus-run-session -- "$0" "$@"

@@ -37,7 +37,8 @@ mod imp {
         pub surface: Cell<Surface>,
         /// The style sheet giving the Body its colours.
         pub style_sheet: RefCell<Option<UserStyleSheet>>,
-        /// Set from loading a Body until WebKit asks whether to navigate to it.
+        /// Set from loading a Body until the web view commits to showing it.
+        /// Only then is navigating to `BODY_URI` allowed.
         pub loading_body: Cell<bool>,
         pub style_handlers: RefCell<Vec<glib::SignalHandlerId>>,
     }
@@ -116,6 +117,15 @@ impl BodyView {
             }
             true
         });
+        web_view.connect_load_changed(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |_, event| {
+                if event == webkit6::LoadEvent::Committed {
+                    view.imp().loading_body.set(false);
+                }
+            }
+        ));
         web_view.connect_context_menu(|_, menu, _| {
             trim_context_menu(menu);
             // Returning true shows no menu at all.
@@ -184,7 +194,7 @@ impl BodyView {
                 if kind == PolicyDecisionType::NavigationAction
                     && navigation_type == NavigationType::Other
                     && uri == BODY_URI
-                    && self.imp().loading_body.replace(false)
+                    && self.imp().loading_body.get()
                 {
                     decision.use_();
                     return;
