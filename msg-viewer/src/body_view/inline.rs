@@ -233,6 +233,11 @@ pub fn register_cid_scheme(
     }
 }
 
+/// A transparent one-pixel GIF, sent along with "not found" so that a
+/// missing Inline attachment shows nothing rather than a broken image.
+const NOTHING: &[u8] = b"GIF89a\x01\0\x01\0\x80\0\0\0\0\0\0\0\0\
+    !\xf9\x04\x01\0\0\0\0,\0\0\0\0\x01\0\x01\0\0\x02\x02D\x01\0;";
+
 fn respond(request: &URISchemeRequest, image: Option<(glib::Bytes, &'static str)>) {
     match image {
         Some((data, content_type)) => {
@@ -241,9 +246,11 @@ fn respond(request: &URISchemeRequest, image: Option<(glib::Bytes, &'static str)
             request.finish(&stream, length, Some(content_type));
         }
         None => {
-            let response = URISchemeResponse::new(&gio::MemoryInputStream::new(), 0);
+            let data = glib::Bytes::from_static(NOTHING);
+            let stream = gio::MemoryInputStream::from_bytes(&data);
+            let response = URISchemeResponse::new(&stream, data.len() as i64);
             response.set_status(404, Some("Not Found"));
-            response.set_content_type("text/plain");
+            response.set_content_type("image/gif");
             request.finish_with_response(&response);
         }
     }
@@ -538,6 +545,8 @@ mod tests {
         assert!(served(&message, "cid:gone@x").is_none());
         assert!(served(&message, "https://example.org/logo@x").is_none());
         assert!(InlineImages::default().get("cid:logo@x").is_none());
+        // What is sent with "not found" is a GIF.
+        assert_eq!(image_type(NOTHING), Some("image/gif"));
     }
 
     #[test]
