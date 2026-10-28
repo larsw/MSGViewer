@@ -195,7 +195,8 @@ impl BodyView {
         if filter.is_none() {
             glib::g_warning!(
                 "msg-viewer",
-                "Remote content is kept out by the Body's Content Security Policy alone"
+                "No content filter; Remote content is kept out by the Body's \
+                 Content Security Policy and the web view's settings only"
             );
         }
         imp.filter.replace(filter);
