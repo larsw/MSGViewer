@@ -539,6 +539,7 @@ dependencies = [
 name = "msg-viewer"
 version = "0.1.0"
 dependencies = [
+ "cfb",
  "gtk4",
  "libadwaita",
  "outlook-msg",

@@ -289,3 +289,35 @@ fn embedded_message_without_storage_has_no_data() {
     assert_eq!(attachment.data(), None);
     assert!(attachment.embedded_message().is_none());
 }
+
+#[test]
+fn hidden_tells_absent_from_false() {
+    let hidden = |props: Props| one_file(props).attachments()[0].hidden();
+    assert_eq!(
+        hidden(&[(PID_ATTACHMENT_HIDDEN, Value::Bool(true))]),
+        Some(true)
+    );
+    assert_eq!(
+        hidden(&[(PID_ATTACHMENT_HIDDEN, Value::Bool(false))]),
+        Some(false)
+    );
+    assert_eq!(hidden(&[(PID_ATTACH_DATA, Value::Binary(b"x"))]), None);
+    let msg = one_file(&[(PID_ATTACHMENT_HIDDEN, Value::Bool(false))]);
+    assert!(!msg.attachments()[0].is_hidden());
+}
+
+#[test]
+fn content_ids_lose_their_angle_brackets_and_spaces() {
+    let content_id = |id| {
+        one_file(&[(PID_ATTACH_CONTENT_ID, Value::Unicode(id))]).attachments()[0]
+            .content_id()
+            .map(str::to_owned)
+    };
+    assert_eq!(content_id("<a@b>").as_deref(), Some("a@b"));
+    assert_eq!(content_id("  <a@b> ").as_deref(), Some("a@b"));
+    assert_eq!(content_id("image001.png").as_deref(), Some("image001.png"));
+    assert_eq!(content_id("<>"), None);
+    assert_eq!(content_id(" "), None);
+    let msg = one_file(&[(PID_ATTACH_CONTENT_ID, Value::String8(b"<logo@x>"))]);
+    assert_eq!(msg.attachments()[0].content_id(), Some("logo@x"));
+}
