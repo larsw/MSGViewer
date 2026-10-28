@@ -47,6 +47,8 @@ mod imp {
         #[template_child]
         pub remote_content_banner: TemplateChild<adw::Banner>,
         #[template_child]
+        pub formatting_note: TemplateChild<gtk::Box>,
+        #[template_child]
         pub web_view: TemplateChild<webkit6::WebView>,
         /// The HTML Body shown, as the Message has it.
         pub html: RefCell<Option<String>>,
@@ -117,14 +119,18 @@ glib::wrapper! {
 }
 
 impl BodyView {
-    /// Shows the Body of `message`, or nothing if it has none. Remote
-    /// content is blocked again, whatever the reader allowed before.
+    /// Shows the Body of `message`, or nothing if it has none, with a note
+    /// when it is Genuine RTF whose formatting isn't shown. Remote content
+    /// is blocked again, whatever the reader allowed before.
     pub fn set_message(&self, message: &Message) {
         let imp = self.imp();
         imp.remote_content.set(RemoteContent::Blocked);
-        let html = match message.body() {
+        let body = message.body();
+        imp.formatting_note
+            .set_visible(matches!(body, Some(Body::GenuineRtf(_))));
+        let html = match body {
             Some(Body::Html(html)) => Some(html),
-            Some(Body::PlainText(text)) => {
+            Some(Body::PlainText(text) | Body::GenuineRtf(text)) => {
                 let html = plain_text::to_html(&text);
                 self.load(html, Surface::System, RemoteContent::Blocked);
                 None
