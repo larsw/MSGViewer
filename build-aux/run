@@ -36,6 +36,13 @@ if [ "$build" = yes ]; then
   (cd "$root" && flatpak run --user org.flatpak.Builder --user --install --force-clean \
     --state-dir=.flatpak-builder _build build-aux/$app.dev.json)
   touch "$stamp"
+  # Right after an install, flatpak run can briefly fail ("Extension
+  # org.freedesktop.Platform.GL.default has invalid merge-dirs"); wait until
+  # the app starts.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    flatpak run --user --command=true "$app" 2>/dev/null && break
+    sleep 1
+  done
 fi
 
 if [ $# -gt 0 ]; then
