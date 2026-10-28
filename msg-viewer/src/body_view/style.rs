@@ -12,7 +12,6 @@ pub enum Surface {
     System,
     /// A light "paper" surface whatever the system style, because email HTML
     /// assumes a white background (ADR-0004). For HTML Bodies.
-    #[allow(dead_code)]
     Paper,
 }
 
@@ -39,9 +38,10 @@ impl Surface {
             channel(accent.blue())
         );
         match self {
-            Surface::Paper => {
-                ":root { color-scheme: light; background: white; color: black; }\n".to_owned()
-            }
+            // No background here: the web view fills in white, and a root
+            // background would keep the Body's own <body> background from
+            // filling the window, as it does in browsers.
+            Surface::Paper => ":root { color-scheme: light; color: black; }\n".to_owned(),
             Surface::System if system_dark => format!(
                 ":root {{ color-scheme: dark; color: white; }}\n\
                  :link, :visited {{ color: oklab(from {accent} max(l, 0.85) a b); }}\n"

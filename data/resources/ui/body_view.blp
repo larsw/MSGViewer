@@ -1,4 +1,5 @@
 using Gtk 4.0;
+using Adw 1;
 using WebKit 6.0;
 
 template $MsgViewerBodyView: Box {
@@ -6,7 +7,13 @@ template $MsgViewerBodyView: Box {
 
   Separator {}
 
-  // Bars about the Body, such as Remote content being blocked, go here.
+  // Bars about the Body go here.
+  // Shown only when the Body references Remote content.
+  Adw.Banner remote_content_banner {
+    title: _("Remote content is blocked to protect your privacy");
+    button-label: _("_Load Remote Content");
+    action-name: "body.load-remote-content";
+  }
 
   WebKit.WebView web_view {
     vexpand: true;

@@ -536,4 +536,73 @@ fn write_fixtures() {
         &recipients,
     );
     std::fs::write(format!("{dir}/many-recipients.msg"), many).unwrap();
+
+    // Every way an HTML Body can ask for Remote content, each at its own
+    // path on MSG_FIXTURE_REMOTE (a local test server, 127.0.0.1:8765 by
+    // default), so its log shows what got through. Host names under
+    // .msgv-test.invalid show up only as DNS lookups.
+    let remote = std::env::var("MSG_FIXTURE_REMOTE").unwrap_or("127.0.0.1:8765".into());
+    let html = REMOTE_CONTENT_HTML.replace("{remote}", &remote);
+    let remote_content = build(
+        &vec![
+            (PID_SUBJECT, unicode("Remote content in every form")),
+            (PID_SENDER_NAME, unicode("Ada Lovelace")),
+            (PID_SENDER_ADDRTYPE, unicode("SMTP")),
+            (PID_SENDER_EMAIL, unicode("ada@example.org")),
+            (PID_CLIENT_SUBMIT_TIME, Value::Time(FILETIME_2023)),
+            (PID_BODY, unicode("Plain-text Body, not shown.")),
+            (PID_HTML, Value::Binary(html.into_bytes())),
+        ],
+        &[],
+    );
+    std::fs::write(format!("{dir}/remote-content.msg"), remote_content).unwrap();
 }
+
+const REMOTE_CONTENT_HTML: &str = r##"<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="x-dns-prefetch-control" content="on">
+<meta http-equiv="refresh" content="2;url=http://{remote}/meta-refresh">
+<base href="http://{remote}/base/">
+<link rel="stylesheet" href="http://{remote}/link-stylesheet.css">
+<link rel="preload" as="image" href="http://{remote}/link-preload.png">
+<link rel="prefetch" href="http://{remote}/link-prefetch">
+<link rel="preconnect" href="http://{remote}/">
+<link rel="preconnect" href="http://preconnect.msgv-test.invalid/">
+<link rel="dns-prefetch" href="http://dns-prefetch.msgv-test.invalid/">
+<link rel="icon" href="http://{remote}/link-icon.png">
+<script type="speculationrules">{"prefetch": [{"source": "list", "urls": ["http://{remote}/speculation-rules"]}]}</script>
+<script src="http://{remote}/script.js"></script>
+<style>
+@import url("http://{remote}/css-import.css");
+@font-face { font-family: Remote; src: url(http://{remote}/css-font.woff2) format("woff2"); }
+body { font-family: Remote, sans-serif; background-image: url('http://{remote}/css-background.png'); }
+.set { background-image: image-set("http://{remote}/css-image-set.png" 1x); }
+</style>
+</head>
+<body background="http://{remote}/body-background.png">
+<h1>Quarterly newsletter</h1>
+<p>Dear reader, this Message asks for Remote content in every way we know of.
+Read <a href="http://link.msgv-test.invalid/article" ping="http://{remote}/a-ping">the full article</a>.</p>
+<p>An image embedded in the Body: <img alt="embedded" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mPQW+BMEmIY1TCqYfhqAAAOjhEQeUYZuQAAAABJRU5ErkJggg==" width="16" height="16"></p>
+<p>Remote images:
+<img alt="img src" src="http://{remote}/img-src.png" width="40" height="40">
+<img alt="srcset" srcset="http://{remote}/img-srcset.png 1x, http://{remote}/img-srcset-2x.png 2x" width="40" height="40">
+<picture><source srcset="http://{remote}/picture-source.png"><img alt="picture" src="relative.png" width="40" height="40"></picture>
+<img alt="protocol-relative" src="//{remote}/protocol-relative.png" width="40" height="40">
+<img alt="lazy" loading="lazy" src="http://{remote}/img-lazy.png" width="40" height="40">
+<input type="image" alt="input" src="http://{remote}/input-image.png" width="40" height="40">
+<svg width="40" height="40"><image href="http://{remote}/svg-image.png" width="40" height="40"/><use href="http://{remote}/svg-use.svg#a"/></svg>
+</p>
+<table background="http://{remote}/table-background.png"><tr>
+<td style="background: url(http://{remote}/td-style.png)" width="120">Styled cell</td>
+<td class="set" width="120">image-set</td></tr></table>
+<p>An Inline attachment, not resolved yet: <img alt="cid" src="cid:image001.png@01D0A524.96D40F30" width="40" height="40"></p>
+<iframe src="http://{remote}/iframe.html" width="80" height="40"></iframe>
+<object data="http://{remote}/object.png" width="40" height="40"></object>
+<embed src="http://{remote}/embed.png" width="40" height="40">
+<video poster="http://{remote}/video-poster.png" src="http://{remote}/video.mp4" width="40" height="40"></video>
+<audio src="http://{remote}/audio.mp3"></audio>
+<form action="http://{remote}/form"><input name="q" value="form"></form>
+</body></html>
+"##;
