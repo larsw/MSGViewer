@@ -39,6 +39,7 @@ The parser is fuzzed on the host with `cargo-fuzz`, which needs a nightly toolch
 
 - Raw bytes, seeded with the samples: `cargo +nightly fuzz run -O from_bytes fuzz/corpus/from_bytes tests/samples -- -dict=fuzz/msg.dict -max_len=65536 -max_total_time=600`
 - Well-formed compound files built from arbitrary Message parts, which reach the property parsing: `cargo +nightly fuzz run -O from_parts fuzz/corpus/from_parts -- -max_total_time=600`
+- Bodies made of arbitrary Compressed RTF, compressed with a correct CRC so they reach the decompressor and the RTF reader: `cargo +nightly fuzz run -O rtf_body fuzz/corpus/rtf_body -- -dict=fuzz/rtf.dict -max_len=16384 -max_total_time=600`
 - Add a regression test to `outlook-msg/tests/damaged.rs` for every crash found
 
 Sample `.msg` files live in `outlook-msg/tests/samples/`, with their source and license recorded in `SOURCES.md` there.
