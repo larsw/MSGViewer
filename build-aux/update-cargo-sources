@@ -1,0 +1,33 @@
+#!/bin/sh
+# Regenerates build-aux/cargo-sources.json from Cargo.lock. Flathub builds
+# without network access, so the Flatpak manifest lists every crate as a
+# source to download beforehand; run this whenever Cargo.lock changes.
+# With --check, it only says whether the file is up to date, as CI does.
+# Needs curl, uv (https://docs.astral.sh/uv/) and network access.
+# The generator is flatpak-builder-tools' flatpak-cargo-generator.py (MIT),
+# pinned to a commit; it is a development tool and is never shipped.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+commit=9d86d336a39b9af38b86f114b6ce5820fe260f91
+sha256=0a2db6be87d75910facef28ab46d4d6460802e8419ab850d0caa6a364d26b380
+url=https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/$commit/cargo/flatpak-cargo-generator.py
+out=$root/build-aux/cargo-sources.json
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL -o "$tmp/flatpak-cargo-generator.py" "$url"
+echo "$sha256  $tmp/flatpak-cargo-generator.py" | sha256sum -c --quiet -
+# Run from the temporary folder, so nothing in the checkout is picked up.
+(cd "$tmp" && uv run --quiet --no-project flatpak-cargo-generator.py \
+  "$root/Cargo.lock" -o cargo-sources.json)
+
+if [ "${1:-}" = --check ]; then
+  if ! cmp -s "$tmp/cargo-sources.json" "$out"; then
+    echo "build-aux/cargo-sources.json doesn't match Cargo.lock; run build-aux/update-cargo-sources" >&2
+    exit 1
+  fi
+  echo "build-aux/cargo-sources.json is up to date"
+else
+  cp "$tmp/cargo-sources.json" "$out"
+  echo "Updated build-aux/cargo-sources.json"
+fi
