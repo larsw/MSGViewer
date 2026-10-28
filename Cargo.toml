@@ -1,5 +1,7 @@
 [workspace]
 members = ["outlook-msg", "msg-viewer"]
+# The fuzz crate needs a nightly toolchain; see AGENTS.md.
+exclude = ["outlook-msg/fuzz"]
 resolver = "3"
 
 [workspace.package]

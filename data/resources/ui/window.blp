@@ -27,6 +27,11 @@ template $MsgViewerWindow: Adw.ApplicationWindow {
       }
     }
 
+    [top]
+    Adw.Banner partial_banner {
+      title: _("Some parts of this message couldn’t be read");
+    }
+
     content: Stack stack {
       transition-type: crossfade;
 
@@ -63,6 +68,18 @@ template $MsgViewerWindow: Adw.ApplicationWindow {
         child: Adw.StatusPage error_page {
           icon-name: "dialog-error-symbolic";
           title: _("Could Not Open File");
+
+          child: Button {
+            label: _("Open _Another File…");
+            use-underline: true;
+            halign: center;
+            action-name: "win.open";
+
+            styles [
+              "pill",
+              "suggested-action",
+            ]
+          };
         };
       }
     };

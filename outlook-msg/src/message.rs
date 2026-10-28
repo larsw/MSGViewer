@@ -1,13 +1,14 @@
-use std::io::{Cursor, Read, Seek};
-use std::path::{Path, PathBuf};
+use std::io::{self, Cursor, Read, Seek};
+use std::path::Path;
 use std::time::SystemTime;
 
 use cfb::CompoundFile;
 use encoding_rs::Encoding;
 
-use crate::Error;
 use crate::attachment::{self, Attachment};
 use crate::props::{DEFAULT_ENCODING, PROPERTIES_STREAM, Properties, StorageKind};
+use crate::reader::Reader;
+use crate::{Error, Limits, Problem};
 
 // Property IDs ([MS-OXPROPS]).
 const PID_MESSAGE_CLASS: u16 = 0x001A;
@@ -36,8 +37,6 @@ const MAPI_SUBMITTED: u32 = 0x8000_0000;
 /// Name prefix of recipient storages, followed by an 8-digit hex index
 /// ([MS-OXMSG] 2.2.1).
 const RECIPIENT_STORAGE_PREFIX: &str = "__recip_version1.0_#";
-/// The most recipient storages a `.msg` file may hold ([MS-OXMSG] 2.2.1).
-const MAX_RECIPIENTS: usize = 2048;
 
 /// A person or mailbox named in a Message.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -62,34 +61,74 @@ pub struct Recipient {
     pub mailbox: Mailbox,
 }
 
+/// The first bytes of every compound file.
+const CFB_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
 /// One Message read from a `.msg` file.
 #[derive(Clone, Debug)]
 pub struct Message {
     props: Properties,
     recipients: Vec<Recipient>,
     attachments: Vec<Attachment>,
+    problems: Vec<Problem>,
 }
 
 impl Message {
+    /// Reads a Message within [`Limits::DEFAULT`].
+    ///
+    /// Fails only for an Unreadable file. When parts of the file are
+    /// damaged, the rest is still read: see [`Message::is_partial`].
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let mut file = CompoundFile::open(Cursor::new(bytes)).map_err(Error::NotCompoundFile)?;
+        Self::from_bytes_with_limits(bytes, Limits::DEFAULT)
+    }
+
+    /// Reads a Message, reading no more than `limits` allow.
+    pub fn from_bytes_with_limits(bytes: &[u8], limits: Limits) -> Result<Self, Error> {
+        let file = CompoundFile::open(Cursor::new(bytes)).map_err(|error| {
+            if bytes.starts_with(&CFB_SIGNATURE) {
+                Error::Damaged(error)
+            } else {
+                Error::NotCompoundFile(error)
+            }
+        })?;
+        let mut reader = Reader::new(file, limits);
         let root = Path::new("/");
-        if !file.is_stream(root.join(PROPERTIES_STREAM)) {
+        if !reader.is_stream(&root.join(PROPERTIES_STREAM)) {
             return Err(Error::NotAMessage);
         }
-        let props = Properties::read(
-            &mut file,
+        let Some(props) = Properties::read(
+            &mut reader,
             root,
             StorageKind::TopLevelMessage,
             DEFAULT_ENCODING,
-        )?;
-        let recipients = read_recipients(&mut file, props.encoding())?;
-        let attachments = attachment::read_all(&mut file, root, props.encoding())?;
+        ) else {
+            let reason = reader.into_problems().pop().map(|p| p.reason);
+            let reason = reason.unwrap_or_else(|| "property table can't be read".into());
+            return Err(Error::Damaged(io::Error::new(
+                io::ErrorKind::InvalidData,
+                reason,
+            )));
+        };
+        let recipients = read_recipients(&mut reader, props.encoding());
+        let attachments = attachment::read_all(&mut reader, root, props.encoding());
         Ok(Message {
             props,
             recipients,
             attachments,
+            problems: reader.into_problems(),
         })
+    }
+
+    /// Whether this is a Partial read: some of the Message was damaged or
+    /// missing and has been left out.
+    pub fn is_partial(&self) -> bool {
+        !self.problems.is_empty()
+    }
+
+    /// What was left out of a Partial read, at most the first hundred
+    /// Problems.
+    pub fn problems(&self) -> &[Problem] {
+        &self.problems
     }
 
     /// All properties of the Message.
@@ -170,36 +209,22 @@ fn mailbox(
     (mailbox != Mailbox::default()).then_some(mailbox)
 }
 
+/// Reads the recipients, in the order the Message numbers them. A damaged
+/// recipient is left out and recorded as a Problem.
 fn read_recipients<F: Read + Seek>(
-    file: &mut CompoundFile<F>,
+    reader: &mut Reader<F>,
     encoding: &'static Encoding,
-) -> Result<Vec<Recipient>, Error> {
-    let mut storages: Vec<(u32, PathBuf)> = file
-        .read_root_storage()
-        .filter(|entry| entry.is_storage())
-        .filter_map(|entry| Some((recipient_index(entry.name())?, entry.path().to_owned())))
-        .collect();
-    storages.sort_unstable_by_key(|(index, _)| *index);
-    storages.truncate(MAX_RECIPIENTS);
-
+) -> Vec<Recipient> {
+    let limit = reader.limits().max_recipients;
+    let storages = reader.child_storages(Path::new("/"), RECIPIENT_STORAGE_PREFIX, limit);
     let mut recipients = Vec::new();
-    for (_, storage) in storages {
-        if !file.is_stream(storage.join(PROPERTIES_STREAM)) {
-            continue;
+    for storage in storages {
+        let kind = StorageKind::RecipientOrAttachment;
+        if let Some(props) = Properties::read(reader, &storage, kind, encoding) {
+            recipients.extend(recipient(&props));
         }
-        let props = Properties::read(file, &storage, StorageKind::RecipientOrAttachment, encoding)?;
-        recipients.extend(recipient(&props));
     }
-    Ok(recipients)
-}
-
-/// The index in a recipient storage's name, `__recip_version1.0_#XXXXXXXX`.
-fn recipient_index(name: &str) -> Option<u32> {
-    let hex = name.strip_prefix(RECIPIENT_STORAGE_PREFIX)?;
-    if hex.len() != 8 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return None;
-    }
-    u32::from_str_radix(hex, 16).ok()
+    recipients
 }
 
 /// A Recipient from its properties, or `None` if it is not a To, Cc or Bcc
@@ -225,17 +250,4 @@ fn recipient(props: &Properties) -> Option<Recipient> {
         PID_EMAIL_ADDRESS,
     )?;
     Some(Recipient { kind, mailbox })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_recipient_storage_index() {
-        assert_eq!(recipient_index("__recip_version1.0_#0000000A"), Some(10));
-        assert_eq!(recipient_index("__recip_version1.0_#0000000"), None);
-        assert_eq!(recipient_index("__recip_version1.0_#+0000000"), None);
-        assert_eq!(recipient_index("__attach_version1.0_#00000000"), None);
-    }
 }

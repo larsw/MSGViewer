@@ -10,10 +10,9 @@ use std::io::{Read, Seek};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use cfb::CompoundFile;
 use encoding_rs::Encoding;
 
-use crate::Error;
+use crate::reader::Reader;
 
 pub(crate) const PROPERTIES_STREAM: &str = "__properties_version1.0";
 
@@ -110,18 +109,33 @@ impl Properties {
     /// 8-bit strings are decoded with the codepage the storage itself names,
     /// or else with `inherited`: a recipient or attachment uses the codepage
     /// of the Message it belongs to.
+    ///
+    /// A Property whose value can't be read is skipped and recorded as a
+    /// Problem. Returns `None`, also with a Problem recorded, when the
+    /// storage's property table can't be read at all.
     pub(crate) fn read<F: Read + Seek>(
-        file: &mut CompoundFile<F>,
+        reader: &mut Reader<F>,
         storage: &Path,
         kind: StorageKind,
         inherited: &'static Encoding,
-    ) -> Result<Self, Error> {
+    ) -> Option<Self> {
+        let table_path = storage.join(PROPERTIES_STREAM);
         let mut table = Vec::new();
-        file.open_stream(storage.join(PROPERTIES_STREAM))?
-            .read_to_end(&mut table)?;
-        let entries: Vec<Entry> = table
-            .get(kind.header_len()..)
-            .unwrap_or_default()
+        if let Err(error) = reader.read_stream_into(&table_path, &mut table) {
+            reader.problem(&table_path, error);
+            // Keep whatever entries were read before the damage.
+            if table.len() < kind.header_len() + ENTRY_LEN {
+                return None;
+            }
+        }
+        let Some(entries) = table.get(kind.header_len()..) else {
+            reader.problem(&table_path, "property table is shorter than its header");
+            return Some(Properties::default());
+        };
+        if entries.len() % ENTRY_LEN != 0 {
+            reader.problem(&table_path, "property table ends in a partial entry");
+        }
+        let entries: Vec<Entry> = entries
             .chunks_exact(ENTRY_LEN)
             .filter_map(|entry| {
                 Some(Entry {
@@ -145,12 +159,12 @@ impl Properties {
             let ty = entry.ty();
             if matches!(ty, PT_STRING8 | PT_UNICODE | PT_BINARY) {
                 let stream = storage.join(format!("__substg1.0_{:08X}", entry.tag));
-                if let Some(value) = read_variable(file, &stream, ty, encoding)? {
-                    values.insert(entry.id(), value);
+                if let Some(data) = reader.read_stream(&stream) {
+                    values.insert(entry.id(), decode_variable(data, ty, encoding));
                 }
             }
         }
-        Ok(Properties { values, encoding })
+        Some(Properties { values, encoding })
     }
 
     /// The encoding 8-bit strings in these properties were decoded with.
@@ -226,22 +240,12 @@ fn filetime_to_system_time(filetime: u64) -> Option<SystemTime> {
         .checked_add(since_1601)
 }
 
-fn read_variable<F: Read + Seek>(
-    file: &mut CompoundFile<F>,
-    stream: &Path,
-    ty: u16,
-    encoding: &'static Encoding,
-) -> Result<Option<PropValue>, Error> {
-    if !file.is_stream(stream) {
-        return Ok(None);
-    }
-    let mut data = Vec::new();
-    file.open_stream(stream)?.read_to_end(&mut data)?;
-    Ok(Some(match ty {
+fn decode_variable(data: Vec<u8>, ty: u16, encoding: &'static Encoding) -> PropValue {
+    match ty {
         PT_UNICODE => PropValue::String(decode_unicode(&data)),
         PT_STRING8 => PropValue::String(decode_string8(&data, encoding)),
         _ => PropValue::Binary(data),
-    }))
+    }
 }
 
 fn decode_unicode(data: &[u8]) -> String {

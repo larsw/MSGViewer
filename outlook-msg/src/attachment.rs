@@ -6,13 +6,14 @@
 //! the `__substg1.0_3701000D` sub-storage instead.
 
 use std::io::{self, Cursor, Read, Seek, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cfb::CompoundFile;
 use encoding_rs::Encoding;
 
 use crate::props::{PROPERTIES_STREAM, Properties, StorageKind};
-use crate::{Error, Message, PropValue};
+use crate::reader::Reader;
+use crate::{Error, Limits, Message, PropValue};
 
 const ATTACHMENT_STORAGE_PREFIX: &str = "__attach_version1.0_#";
 const EMBEDDED_MESSAGE_STORAGE: &str = "__substg1.0_3701000D";
@@ -50,6 +51,9 @@ pub struct Attachment {
     props: Properties,
     /// An Embedded message, re-encoded as a standalone `.msg` file.
     embedded: Option<Vec<u8>>,
+    /// The Limits to read the Embedded message with: those of the Message
+    /// carrying it, one level less deep.
+    embedded_limits: Limits,
 }
 
 impl Attachment {
@@ -148,9 +152,16 @@ impl Attachment {
         }
     }
 
-    /// Reads the Embedded message, if this Attachment is one.
+    /// Reads the Embedded message, if this Attachment is one and it could be
+    /// read.
+    ///
+    /// It is read with the Limits of the Message carrying it, one level less
+    /// deep, so that Embedded messages inside it stop at
+    /// [`Limits::max_embedded_depth`]. One nested deeper than that, or too
+    /// damaged to copy, gives `None` and a Problem of the carrying Message.
     pub fn embedded_message(&self) -> Option<Result<Message, Error>> {
-        self.embedded.as_deref().map(Message::from_bytes)
+        let bytes = self.embedded.as_deref()?;
+        Some(Message::from_bytes_with_limits(bytes, self.embedded_limits))
     }
 
     fn int(&self, id: u16) -> Option<i64> {
@@ -160,57 +171,59 @@ impl Attachment {
 
 /// Reads every Attachment of the Message stored in `storage`, in the order
 /// Outlook numbered them. 8-bit strings fall back to the Message's `encoding`.
+/// A damaged Attachment is left out, and a damaged Embedded message leaves
+/// just its Attachment without data; both are recorded as Problems.
 pub(crate) fn read_all<F: Read + Seek>(
-    file: &mut CompoundFile<F>,
+    reader: &mut Reader<F>,
     storage: &Path,
     encoding: &'static Encoding,
-) -> Result<Vec<Attachment>, Error> {
-    let mut storages: Vec<(u32, PathBuf)> = file
-        .read_storage(storage)?
-        .filter(|entry| entry.is_storage())
-        .filter_map(|entry| {
-            let number = entry.name().strip_prefix(ATTACHMENT_STORAGE_PREFIX)?;
-            let number = u32::from_str_radix(number, 16).ok()?;
-            Some((number, entry.path().to_owned()))
-        })
-        .collect();
-    storages.sort();
-
+) -> Vec<Attachment> {
+    let limit = reader.limits().max_attachments;
+    let storages = reader.child_storages(storage, ATTACHMENT_STORAGE_PREFIX, limit);
     let mut attachments = Vec::with_capacity(storages.len());
-    for (_, path) in storages {
-        if !file.is_stream(path.join(PROPERTIES_STREAM)) {
+    for path in storages {
+        let kind = StorageKind::RecipientOrAttachment;
+        let Some(props) = Properties::read(reader, &path, kind, encoding) else {
             continue;
-        }
-        let props = Properties::read(file, &path, StorageKind::RecipientOrAttachment, encoding)?;
+        };
         let mut attachment = Attachment {
             props,
             embedded: None,
+            embedded_limits: *reader.limits(),
         };
-        let embedded = path.join(EMBEDDED_MESSAGE_STORAGE);
-        if attachment.is_embedded_message() && file.is_storage(&embedded) {
-            // A damaged Embedded message leaves just that Attachment without data.
-            attachment.embedded = export_embedded_message(file, &embedded).ok();
+        if attachment.is_embedded_message() {
+            let embedded = path.join(EMBEDDED_MESSAGE_STORAGE);
+            if !reader.file().is_storage(&embedded) {
+                reader.problem(&embedded, "Embedded message is missing");
+            } else if let Some(limits) = reader.embedded_limits(&embedded) {
+                attachment.embedded_limits = limits;
+                match export_embedded_message(reader, &embedded) {
+                    Ok(bytes) => attachment.embedded = Some(bytes),
+                    Err(error) => reader.problem(&embedded, error),
+                }
+            }
         }
         attachments.push(attachment);
     }
-    Ok(attachments)
+    attachments
 }
 
 /// Copies the Embedded message in `storage` into a new compound file, laid
-/// out as a top-level `.msg` file, and returns its bytes.
+/// out as a top-level `.msg` file, and returns its bytes. Streams that can't
+/// be read are left out of the copy, and recorded as Problems.
 fn export_embedded_message<F: Read + Seek>(
-    file: &mut CompoundFile<F>,
+    reader: &mut Reader<F>,
     storage: &Path,
 ) -> io::Result<Vec<u8>> {
     let mut out = CompoundFile::create_with_version(cfb::Version::V3, Cursor::new(Vec::new()))?;
     let root = Path::new("/");
-    copy_storage(file, storage, &mut out, root)?;
+    copy_storage(reader, storage, &mut out, root)?;
 
     // Named properties are mapped once, at the root of the outermost file
     // ([MS-OXMSG] 2.2.3), so the Embedded message needs a copy of the map.
     let named = root.join(NAMED_PROPERTIES_STORAGE);
-    if file.is_storage(&named) && !out.exists(&named) {
-        copy_storage(file, &named, &mut out, &named)?;
+    if reader.file().is_storage(&named) && !out.exists(&named) {
+        copy_storage(reader, &named, &mut out, &named)?;
     }
 
     let props = root.join(PROPERTIES_STREAM);
@@ -232,14 +245,15 @@ fn export_embedded_message<F: Read + Seek>(
     Ok(out.into_inner().into_inner())
 }
 
-/// Copies the storage `from` with everything in it to `to` in `out`.
+/// Copies the storage `from` with everything in it to `to` in `out`, reading
+/// through `reader` so that the copy counts against its limits.
 fn copy_storage<F: Read + Seek>(
-    file: &mut CompoundFile<F>,
+    reader: &mut Reader<F>,
     from: &Path,
     out: &mut CompoundFile<Cursor<Vec<u8>>>,
     to: &Path,
 ) -> io::Result<()> {
-    let entries: Vec<cfb::Entry> = file.walk_storage(from)?.collect();
+    let entries: Vec<cfb::Entry> = reader.file().walk_storage(from)?.collect();
     for entry in &entries {
         let relative = entry
             .path()
@@ -247,10 +261,11 @@ fn copy_storage<F: Read + Seek>(
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "bad storage path"))?;
         let target = to.join(relative);
         if entry.is_stream() {
-            let mut source = file.open_stream(entry.path())?;
-            let mut copy = out.create_stream(&target)?;
-            io::copy(&mut source, &mut copy)?;
-            copy.flush()?;
+            if let Some(data) = reader.read_stream(entry.path()) {
+                let mut copy = out.create_stream(&target)?;
+                copy.write_all(&data)?;
+                copy.flush()?;
+            }
         } else {
             if !out.exists(&target) {
                 out.create_storage(&target)?;
