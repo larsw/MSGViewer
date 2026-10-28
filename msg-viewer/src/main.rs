@@ -1,4 +1,6 @@
 mod application;
+mod attachment_open;
+mod attachment_policy;
 mod attachment_save;
 mod attachment_strip;
 mod body_view;

@@ -2,6 +2,7 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
+use crate::attachment_open;
 use crate::config;
 use crate::window::Window;
 
@@ -26,6 +27,17 @@ mod imp {
     }
 
     impl ApplicationImpl for Application {
+        fn startup(&self) {
+            self.parent_startup();
+            // Left behind if the app last ended without shutting down.
+            attachment_open::remove_all_copies();
+        }
+
+        fn shutdown(&self) {
+            attachment_open::remove_all_copies();
+            self.parent_shutdown();
+        }
+
         fn activate(&self) {
             Window::new(&self.obj()).present();
         }

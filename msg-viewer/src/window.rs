@@ -1,9 +1,9 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
-use outlook_msg::Message;
+use outlook_msg::{Attachment, Message};
 
 use crate::application::Application;
 use crate::message_view::MessageView;
@@ -24,6 +24,8 @@ mod imp {
         pub error_page: TemplateChild<adw::StatusPage>,
         /// The file shown in this window, if any.
         pub file: RefCell<Option<gio::File>>,
+        /// Whether this window shows an Embedded message, which has no file.
+        pub shows_embedded_message: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -80,6 +82,30 @@ impl Window {
         });
     }
 
+    /// Reads the Embedded message carried by `attachment` and shows it in
+    /// this window. There is no file behind it, so the window is titled
+    /// with the Attachment's name until the Message's subject is known.
+    pub fn open_embedded(&self, attachment: Attachment) {
+        self.imp().shows_embedded_message.set(true);
+        self.set_title(Some(&attachment.safe_file_name()));
+        let win = self.clone();
+        glib::spawn_future_local(async move {
+            match read_embedded(attachment).await {
+                Ok(message) => win.show_message(&message),
+                Err(error) => {
+                    win.imp().shows_embedded_message.set(false);
+                    win.show_error(&error);
+                }
+            }
+        });
+    }
+
+    /// Whether this window shows nothing yet, so the next file can use it.
+    fn is_empty(&self) -> bool {
+        let imp = self.imp();
+        imp.file.borrow().is_none() && !imp.shows_embedded_message.get()
+    }
+
     fn show_message(&self, message: &Message) {
         let imp = self.imp();
         if let Some(subject) = message.subject() {
@@ -124,7 +150,7 @@ impl Window {
         };
 
         // Each file gets its own window; reuse this one only while it is empty.
-        if self.imp().file.borrow().is_none() {
+        if self.is_empty() {
             self.open_file(file);
         } else if let Some(app) = self.application().and_downcast::<Application>() {
             let window = Window::new(&app);
@@ -146,6 +172,19 @@ async fn load_message(file: &gio::File) -> Result<Message, String> {
         .map_err(|_| "The file couldn’t be read.".to_owned())?
         .map_err(|error| {
             glib::g_debug!("msg-viewer", "Unreadable file: {error}");
+            describe_parse_error(&error).to_owned()
+        })
+}
+
+/// Reads the Embedded message carried by `attachment`, off the main thread,
+/// or says in plain words why it can't be read.
+async fn read_embedded(attachment: Attachment) -> Result<Message, String> {
+    gio::spawn_blocking(move || attachment.embedded_message())
+        .await
+        .map_err(|_| "The message couldn’t be read.".to_owned())?
+        .ok_or_else(|| "The message couldn’t be read.".to_owned())?
+        .map_err(|error| {
+            glib::g_debug!("msg-viewer", "Unreadable Embedded message: {error}");
             describe_parse_error(&error).to_owned()
         })
 }
