@@ -9,9 +9,7 @@ use std::collections::HashMap;
 use std::io::{Read, Seek};
 use std::path::Path;
 
-use cfb::CompoundFile;
-
-use crate::Error;
+use crate::reader::Reader;
 
 pub(crate) const PROPERTIES_STREAM: &str = "__properties_version1.0";
 
@@ -65,21 +63,31 @@ pub struct Properties {
 }
 
 impl Properties {
+    /// Reads the Properties of one storage. A Property whose value can't be
+    /// read is skipped and recorded as a Problem. Returns `None`, also with a
+    /// Problem recorded, when the storage's property table can't be read at
+    /// all.
     pub(crate) fn read<F: Read + Seek>(
-        file: &mut CompoundFile<F>,
+        reader: &mut Reader<F>,
         storage: &Path,
         kind: StorageKind,
-    ) -> Result<Self, Error> {
+    ) -> Option<Self> {
+        let table_path = storage.join(PROPERTIES_STREAM);
         let mut table = Vec::new();
-        file.open_stream(storage.join(PROPERTIES_STREAM))?
-            .read_to_end(&mut table)?;
+        if let Err(error) = reader.read_stream_into(&table_path, &mut table) {
+            reader.problem(&table_path, error);
+            // Keep whatever entries were read before the damage.
+            if table.len() < kind.header_len() + ENTRY_LEN {
+                return None;
+            }
+        }
+        let entries = table.get(kind.header_len()..).unwrap_or_default();
+        if entries.len() % ENTRY_LEN != 0 {
+            reader.problem(&table_path, "property table ends in a partial entry");
+        }
 
         let mut values = HashMap::new();
-        for entry in table
-            .get(kind.header_len()..)
-            .unwrap_or_default()
-            .chunks_exact(ENTRY_LEN)
-        {
+        for entry in entries.chunks_exact(ENTRY_LEN) {
             let tag = u32::from_le_bytes(entry[0..4].try_into().unwrap());
             let (id, ty) = ((tag >> 16) as u16, tag as u16);
             let raw: [u8; 8] = entry[8..16].try_into().unwrap();
@@ -93,7 +101,9 @@ impl Properties {
                 PT_SYSTIME => Some(PropValue::Time(u64::from_le_bytes(raw))),
                 PT_STRING8 | PT_UNICODE | PT_BINARY => {
                     let stream = storage.join(format!("__substg1.0_{tag:08X}"));
-                    read_variable(file, &stream, ty)?
+                    reader
+                        .read_stream(&stream)
+                        .map(|data| decode_variable(data, ty))
                 }
                 _ => None,
             };
@@ -101,7 +111,7 @@ impl Properties {
                 values.insert(id, value);
             }
         }
-        Ok(Properties { values })
+        Some(Properties { values })
     }
 
     pub fn get(&self, id: u16) -> Option<&PropValue> {
@@ -116,21 +126,12 @@ impl Properties {
     }
 }
 
-fn read_variable<F: Read + Seek>(
-    file: &mut CompoundFile<F>,
-    stream: &Path,
-    ty: u16,
-) -> Result<Option<PropValue>, Error> {
-    if !file.is_stream(stream) {
-        return Ok(None);
-    }
-    let mut data = Vec::new();
-    file.open_stream(stream)?.read_to_end(&mut data)?;
-    Ok(Some(match ty {
+fn decode_variable(data: Vec<u8>, ty: u16) -> PropValue {
+    match ty {
         PT_UNICODE => PropValue::String(decode_unicode(&data)),
         PT_STRING8 => PropValue::String(decode_string8(&data)),
         _ => PropValue::Binary(data),
-    }))
+    }
 }
 
 fn decode_unicode(data: &[u8]) -> String {

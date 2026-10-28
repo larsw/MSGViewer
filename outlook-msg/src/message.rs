@@ -1,10 +1,11 @@
-use std::io::Cursor;
+use std::io::{self, Cursor};
 use std::path::Path;
 
 use cfb::CompoundFile;
 
-use crate::Error;
 use crate::props::{PROPERTIES_STREAM, Properties, StorageKind};
+use crate::reader::Reader;
+use crate::{Error, Limits, Problem};
 
 // Property IDs ([MS-OXPROPS]).
 const PID_MESSAGE_CLASS: u16 = 0x001A;
@@ -26,21 +27,63 @@ pub struct Mailbox {
     pub address: Option<String>,
 }
 
+/// The first bytes of every compound file.
+const CFB_SIGNATURE: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
 /// One Message read from a `.msg` file.
 #[derive(Clone, Debug)]
 pub struct Message {
     props: Properties,
+    problems: Vec<Problem>,
 }
 
 impl Message {
+    /// Reads a Message within [`Limits::DEFAULT`].
+    ///
+    /// Fails only for an Unreadable file. When parts of the file are
+    /// damaged, the rest is still read: see [`Message::is_partial`].
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        let mut file = CompoundFile::open(Cursor::new(bytes)).map_err(Error::NotCompoundFile)?;
+        Self::from_bytes_with_limits(bytes, Limits::DEFAULT)
+    }
+
+    /// Reads a Message, reading no more than `limits` allow.
+    pub fn from_bytes_with_limits(bytes: &[u8], limits: Limits) -> Result<Self, Error> {
+        let file = CompoundFile::open(Cursor::new(bytes)).map_err(|error| {
+            if bytes.starts_with(&CFB_SIGNATURE) {
+                Error::Damaged(error)
+            } else {
+                Error::NotCompoundFile(error)
+            }
+        })?;
+        let mut reader = Reader::new(file, limits);
         let root = Path::new("/");
-        if !file.is_stream(root.join(PROPERTIES_STREAM)) {
+        if !reader.is_stream(&root.join(PROPERTIES_STREAM)) {
             return Err(Error::NotAMessage);
         }
-        let props = Properties::read(&mut file, root, StorageKind::TopLevelMessage)?;
-        Ok(Message { props })
+        let Some(props) = Properties::read(&mut reader, root, StorageKind::TopLevelMessage) else {
+            let reason = reader.into_problems().pop().map(|p| p.reason);
+            let reason = reason.unwrap_or_else(|| "property table can't be read".into());
+            return Err(Error::Damaged(io::Error::new(
+                io::ErrorKind::InvalidData,
+                reason,
+            )));
+        };
+        Ok(Message {
+            props,
+            problems: reader.into_problems(),
+        })
+    }
+
+    /// Whether this is a Partial read: some of the Message was damaged or
+    /// missing and has been left out.
+    pub fn is_partial(&self) -> bool {
+        !self.problems.is_empty()
+    }
+
+    /// What was left out of a Partial read, at most the first hundred
+    /// Problems.
+    pub fn problems(&self) -> &[Problem] {
+        &self.problems
     }
 
     /// All properties of the Message.
