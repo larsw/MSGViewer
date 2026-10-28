@@ -110,17 +110,36 @@ fn each_missing_root_stream_gives_partial_read_or_unreadable_file() {
 
 #[test]
 fn not_a_message_is_unreadable() {
-    let mut file = CompoundFile::create(Cursor::new(Vec::new())).unwrap();
-    file.create_stream("/WordDocument")
-        .unwrap()
-        .write_all(b"text")
-        .unwrap();
-    file.flush().unwrap();
-    let bytes = file.into_inner().into_inner();
+    let bytes = compound_file_with_stream("/WordDocument", b"text");
     assert!(matches!(
         Message::from_bytes(&bytes),
         Err(Error::NotAMessage)
     ));
+}
+
+fn compound_file_with_stream(path: &str, data: &[u8]) -> Vec<u8> {
+    let mut file = CompoundFile::create(Cursor::new(Vec::new())).unwrap();
+    file.create_stream(path).unwrap().write_all(data).unwrap();
+    file.flush().unwrap();
+    file.into_inner().into_inner()
+}
+
+#[test]
+fn short_property_table_is_partial() {
+    let bytes = compound_file_with_stream("/__properties_version1.0", &[0; 10]);
+    assert!(Message::from_bytes(&bytes).unwrap().is_partial());
+}
+
+#[test]
+fn property_table_ending_in_partial_entry_is_partial() {
+    let mut table = vec![0; 32];
+    // PidTagImportance, a PtypInteger32, then half an entry.
+    table.extend([0x03, 0x00, 0x17, 0x00, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]);
+    table.extend([0x1F, 0x00, 0x37, 0x00]);
+    let bytes = compound_file_with_stream("/__properties_version1.0", &table);
+    let message = Message::from_bytes(&bytes).unwrap();
+    assert!(message.is_partial());
+    assert_eq!(message.properties().get(0x0017), Some(&PropValue::Int(2)));
 }
 
 #[test]

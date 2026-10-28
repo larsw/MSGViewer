@@ -81,7 +81,10 @@ impl Properties {
                 return None;
             }
         }
-        let entries = table.get(kind.header_len()..).unwrap_or_default();
+        let Some(entries) = table.get(kind.header_len()..) else {
+            reader.problem(&table_path, "property table is shorter than its header");
+            return Some(Properties::default());
+        };
         if entries.len() % ENTRY_LEN != 0 {
             reader.problem(&table_path, "property table ends in a partial entry");
         }
