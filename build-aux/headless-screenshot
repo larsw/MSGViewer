@@ -4,10 +4,11 @@
 #   build-aux/headless-screenshot /tmp/shot.png outlook-msg/tests/samples/testMSG.msg
 # Files given are made readable to the sandbox directly, since the document
 # portal can't be mounted inside the nested session.
-# Set SHOT_DELAY (seconds, default 4) for slower startups, and MSGV_BRANCH to run
+# Set SHOT_DELAY (seconds, default 40) to change how long to wait, and MSGV_BRANCH to run
 # a build installed with flatpak-builder --default-branch=<branch>.
-# Showing a Body needs SHOT_DELAY=40: the nested session's portal takes 25 s to
-# start (its org.freedesktop.secrets lookup times out), and WebKit waits for it.
+# Every window holds a WebKit view, and WebKit waits for the nested session's
+# portal, which takes about 25 s to start (its org.freedesktop.secrets lookup
+# times out); hence the long default.
 set -eu
 if [ -z "${DBUS_SESSION_BUS_ADDRESS_HEADLESS:-}" ]; then
   # A throwaway config directory keeps the nested session from loading the
@@ -42,7 +43,7 @@ WAYLAND_DISPLAY=$display flatpak run --user --no-documents-portal \
   --env=ADW_DISABLE_PORTAL=1 --env=GDK_DEBUG=no-portals $access \
   "io.github.larsw.MSGViewer${MSGV_BRANCH:+//$MSGV_BRANCH}" "$@" >"$logdir/app.log" 2>&1 &
 app=$!
-sleep "${SHOT_DELAY:-4}"
+sleep "${SHOT_DELAY:-40}"
 
 # The Shell starts in the overview; leave it so the window is in view.
 gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
