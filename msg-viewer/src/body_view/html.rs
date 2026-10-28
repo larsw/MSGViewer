@@ -98,6 +98,25 @@ pub fn references_remote_content(html: &str) -> bool {
     })
 }
 
+/// The `cid:` links through which `html` shows Inline attachments: those
+/// its images, style sheets and fonts would load, each once, cleaned as the
+/// URL parser cleans them. Links, and markup that never shows, such as
+/// Outlook's conditional comments, don't count.
+pub fn cid_urls(html: &str) -> Vec<String> {
+    let mut urls = Vec::new();
+    for_each_resource(html, &mut |resource| {
+        let (Resource::Url(url) | Resource::AbsoluteUrl(url)) = resource else {
+            return;
+        };
+        let url = clean_url(&url);
+        let is_cid = scheme(&url).is_some_and(|scheme| scheme.eq_ignore_ascii_case("cid"));
+        if is_cid && !urls.contains(&url) {
+            urls.push(url);
+        }
+    });
+    urls
+}
+
 /// Something in an HTML Body that names a URL.
 #[derive(Debug, PartialEq, Eq)]
 enum Resource {
@@ -561,6 +580,19 @@ mod tests {
     }
 
     #[test]
+    fn allowed_policy_still_lets_inline_attachments_load() {
+        // Without default-src, img-src, style-src or font-src, any URL may
+        // load, `cid:` links included.
+        for directive in ALLOWED_POLICY.split("; ") {
+            let name = directive.split_once(' ').unwrap().0;
+            assert!(
+                !matches!(name, "default-src" | "img-src" | "style-src" | "font-src"),
+                "{directive}"
+            );
+        }
+    }
+
+    #[test]
     fn finds_images() {
         assert!(remote("<img src=\"https://example.org/a.png\">"));
         assert!(remote("<IMG SRC=HTTP://example.org/a.png>"));
@@ -714,6 +746,41 @@ mod tests {
         assert_eq!(decode_char_refs("&#99999999999;&"), "\u{fffd}&");
         assert!(is_remote(" ht\ntps://x ", false));
         assert!(!is_remote("javascript:x", true));
+    }
+
+    #[test]
+    fn finds_cid_links_that_show() {
+        let html = "<html><head><style>p { background: url(cid:bg@x) }</style></head>\
+                    <body background=\"CID:Body@X\"><img src=\"cid:image001.png@01D0A524.96D40F30\">\
+                    <img SRC=' cid:a%20b@x '><img srcset=\"cid:small@x 1x, cid:big@x 2x\">\
+                    <img src=\"cid:image001.png@01D0A524.96D40F30\">\
+                    <p style=\"background:url(&#99;id&colon;styled@x)\">\
+                    <img src=\"https://example.org/a.png\"><img src=\"data:image/png;base64,AA\">";
+        assert_eq!(
+            cid_urls(html),
+            [
+                "cid:bg@x",
+                "cid:body@x",
+                "cid:image001.png@01d0a524.96d40f30",
+                "cid:a%20b@x",
+                "cid:small@x",
+                "cid:big@x",
+                "cid:styled@x",
+            ]
+        );
+    }
+
+    #[test]
+    fn ignores_cid_links_that_never_show() {
+        assert!(cid_urls("<a href=\"cid:a@x\">a</a>").is_empty());
+        assert!(cid_urls("<!-- <img src=\"cid:a@x\"> -->").is_empty());
+        assert!(
+            cid_urls("<!--[if gte vml 1]><v:imagedata src=\"cid:a@x\"/><![endif]-->").is_empty()
+        );
+        assert!(cid_urls("<iframe src=\"cid:a@x\"></iframe>").is_empty());
+        assert!(cid_urls("<title><img src=\"cid:a@x\"></title>").is_empty());
+        assert!(cid_urls("<img src=\"image001.png\"><img src=\"xcid:a\">").is_empty());
+        assert!(cid_urls("<p>cid:a@x</p>").is_empty());
     }
 
     #[test]

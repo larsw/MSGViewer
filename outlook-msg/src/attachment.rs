@@ -115,10 +115,17 @@ impl Attachment {
     /// Whether the sender marked the Attachment as hidden
     /// (`PidTagAttachmentHidden`), as is usual for Inline attachments.
     pub fn is_hidden(&self) -> bool {
-        matches!(
-            self.props.get(PID_ATTACHMENT_HIDDEN),
-            Some(PropValue::Bool(true))
-        )
+        self.hidden() == Some(true)
+    }
+
+    /// `PidTagAttachmentHidden` as the sender set it, or `None` if they
+    /// didn't say. An explicit `false` marks an Attachment the sender meant
+    /// to be listed, even if the Body also shows it.
+    pub fn hidden(&self) -> Option<bool> {
+        match self.props.get(PID_ATTACHMENT_HIDDEN)? {
+            PropValue::Bool(hidden) => Some(*hidden),
+            _ => None,
+        }
     }
 
     /// `PidTagAttachFlags`: 0x1 invisible in HTML, 0x2 invisible in RTF,

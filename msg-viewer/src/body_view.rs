@@ -12,8 +12,12 @@
 //! and connecting to servers ahead of time. Allowing Remote content lifts
 //! the filter and loosens the policy for that Message only, and is never
 //! remembered.
+//!
+//! Inline attachments always show: `cid:` links are served from the Message
+//! shown, never from the network (`inline.rs`).
 
 mod html;
+pub mod inline;
 mod plain_text;
 mod remote_content;
 mod style;
@@ -33,6 +37,7 @@ use webkit6::{
 };
 
 use html::RemoteContent;
+use inline::InlineImages;
 use style::Surface;
 
 /// The address of every Body this widget loads.
@@ -70,6 +75,8 @@ mod imp {
         /// Only then is navigating to `BODY_URI` allowed.
         pub loading_body: Cell<bool>,
         pub style_handlers: RefCell<Vec<glib::SignalHandlerId>>,
+        /// The images of the Message shown that `cid:` links can show.
+        pub inline_images: RefCell<InlineImages>,
     }
 
     #[glib::object_subclass]
@@ -128,6 +135,8 @@ impl BodyView {
         let body = message.body();
         imp.formatting_note
             .set_visible(matches!(body, Some(Body::GenuineRtf(_))));
+        imp.inline_images
+            .replace(InlineImages::new(message.attachments()));
         let html = match body {
             Some(Body::Html(html)) => Some(html),
             Some(Body::PlainText(text) | Body::GenuineRtf(text)) => {
@@ -216,6 +225,14 @@ impl BodyView {
         let imp = self.imp();
         let web_view = &*imp.web_view;
         web_view.set_settings(&locked_down_settings());
+        if let Some(context) = web_view.context() {
+            // Each web view gets the images of the Message its own view shows.
+            inline::register_cid_scheme(&context, |web_view, url| {
+                let view = web_view.ancestor(BodyView::static_type())?;
+                let view = view.downcast_ref::<BodyView>()?;
+                view.imp().inline_images.borrow().get(url)
+            });
+        }
         remote_content::with_blocking_filter(glib::clone!(
             #[weak(rename_to = view)]
             self,

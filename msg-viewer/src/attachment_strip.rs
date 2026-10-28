@@ -10,6 +10,7 @@ use crate::application::Application;
 use crate::attachment_open::{self, TempCopies};
 use crate::attachment_policy;
 use crate::attachment_save;
+use crate::body_view::inline;
 use crate::window::Window;
 
 mod imp {
@@ -102,7 +103,15 @@ glib::wrapper! {
 impl AttachmentStrip {
     pub fn set_message(&self, message: &Message) {
         let imp = self.imp();
-        let attachments = message.attachments().to_vec();
+        // Inline attachments show in the Body instead.
+        let inline = inline::inline_attachments(message);
+        let attachments: Vec<Attachment> = message
+            .attachments()
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !inline.contains(index))
+            .map(|(_, attachment)| attachment.clone())
+            .collect();
 
         imp.chips.remove_all();
         for (index, attachment) in attachments.iter().enumerate() {
@@ -245,7 +254,8 @@ impl AttachmentStrip {
         }
     }
 
-    /// Asks for a folder and saves every Attachment into it.
+    /// Asks for a folder and saves every Attachment into it. Like the strip,
+    /// it leaves out Inline attachments, which are part of the Body.
     async fn save_all(&self) {
         let dialog = gtk::FileDialog::builder()
             .title(gettext("Save All Attachments"))

@@ -618,6 +618,7 @@ dependencies = [
 name = "msg-viewer"
 version = "0.1.0"
 dependencies = [
+ "cfb",
  "gettext-rs",
  "gtk4",
  "libadwaita",

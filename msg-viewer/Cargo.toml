@@ -16,5 +16,9 @@ gtk = { version = "0.11.5", package = "gtk4", features = ["v4_18"] }
 outlook-msg = { path = "../outlook-msg" }
 webkit6 = { version = "0.6.1", features = ["v2_42"] }
 
+[dev-dependencies]
+# Builds small `.msg` files for tests, as the parser's own tests do.
+cfb = "0.15.0"
+
 [lints.rust]
 unsafe_code = "forbid"
