@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Prints the metainfo release notes of VERSION as Markdown, and fails if
+VERSION is not the newest release there or doesn't match the app's version
+in meson.build and msg-viewer/Cargo.toml.
+
+    build-aux/release-notes 1.0.0
+"""
+
+import re
+import sys
+import tomllib
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+METAINFO = ROOT / "data" / "io.github.larsw.MSGViewer.metainfo.xml.in"
+
+
+def fail(message):
+    sys.exit(f"release-notes: {message}")
+
+
+def text(element):
+    return " ".join("".join(element.itertext()).split())
+
+
+def main():
+    if len(sys.argv) != 2:
+        fail("usage: release-notes VERSION")
+    version = sys.argv[1].removeprefix("v")
+
+    meson = re.search(r"^\s*version:\s*'([^']+)'", (ROOT / "meson.build").read_text(), re.M)
+    cargo = tomllib.loads((ROOT / "msg-viewer" / "Cargo.toml").read_text())["package"]["version"]
+    releases = ET.parse(METAINFO).getroot().findall("./releases/release")
+    if not releases:
+        fail("the metainfo has no releases")
+    newest = releases[0]
+    for name, found in [
+        ("meson.build", meson and meson.group(1)),
+        ("msg-viewer/Cargo.toml", cargo),
+        ("the newest metainfo release", newest.get("version")),
+    ]:
+        if found != version:
+            fail(f"{name} says {found}, not {version}")
+
+    lines = []
+    for element in newest.find("description"):
+        if element.tag == "p":
+            lines += [text(element), ""]
+        elif element.tag in ("ul", "ol"):
+            lines += [f"- {text(item)}" for item in element.findall("li")] + [""]
+    print("\n".join(lines).strip())
+
+
+main()

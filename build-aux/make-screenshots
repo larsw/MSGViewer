@@ -1,0 +1,19 @@
+#!/bin/sh
+# Retakes the store screenshots in data/screenshots/ from made-up messages
+# (outlook-msg/examples/demo_message.rs), using the installed Flatpak in a
+# headless GNOME Shell. Build and install the app first, e.g. build-aux/run.
+# Set MSGV_BRANCH to use a build installed with --default-branch=<branch>.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+demo=$(mktemp -d)
+trap 'rm -rf "$demo"' EXIT
+
+(cd "$root" && cargo run -q -p outlook-msg --example demo_message -- "$demo")
+
+# Store screenshots are in English, whatever the local language is.
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 LANGUAGE=en SHOT_WINDOW=1
+shots=$root/data/screenshots
+"$root/build-aux/headless-screenshot" "$shots/message.png" "$demo/project-update.msg"
+SHOT_DARK=1 "$root/build-aux/headless-screenshot" "$shots/message-dark.png" "$demo/project-update.msg"
+"$root/build-aux/headless-screenshot" "$shots/remote-content.png" "$demo/newsletter.msg"
+echo "Look at the screenshots in $shots before committing them."

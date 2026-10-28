@@ -28,6 +28,7 @@ The app crate needs GTK, libadwaita and WebKitGTK from the GNOME SDK, so build a
 - Whenever `Cargo.lock` changes, run `build-aux/update-cargo-sources` (needs [uv](https://docs.astral.sh/uv/)) and commit `build-aux/cargo-sources.json`, or the Flathub manifest can't build. It runs flatpak-builder-tools' `flatpak-cargo-generator.py`, pinned to a commit
 - When several builds are in progress at once (for example in separate worktrees), add `--default-branch=<name>` to the Flatpak build so each installs side by side, and set `MSGV_BRANCH=<name>` for the screenshot script
 - See it running without touching the desktop: `build-aux/headless-screenshot OUT.png [FILE.msg...]` runs the installed Flatpak in a throwaway headless GNOME Shell and saves a screenshot
+- Store screenshots: `build-aux/make-screenshots` retakes `data/screenshots/*.png` from the made-up Messages in `outlook-msg/examples/demo_message.rs`, in English, with the installed Flatpak. Never use real or sample messages with real people in them
 
 Translations use gettext with the `msg-viewer` domain; only English ships in v1, so `po/LINGUAS` is empty:
 
@@ -43,3 +44,11 @@ The parser is fuzzed on the host with `cargo-fuzz`, which needs a nightly toolch
 - Add a regression test to `outlook-msg/tests/damaged.rs` for every crash found
 
 Sample `.msg` files live in `outlook-msg/tests/samples/`, with their source and license recorded in `SOURCES.md` there.
+
+## Releasing
+
+1. Set the new version in `meson.build` and `msg-viewer/Cargo.toml`, and add a `<release>` with notes at the top of `<releases>` in `data/io.github.larsw.MSGViewer.metainfo.xml.in`. `outlook-msg` has its own version.
+2. If the UI changed, retake the screenshots with `build-aux/make-screenshots`. Point the screenshot URLs in the metainfo at the new tag.
+3. Check with `build-aux/release-notes X.Y.Z`, which fails unless all three versions agree and prints the notes; then commit, tag `vX.Y.Z` and push the tag.
+4. `.github/workflows/release.yml` then builds the Flathub manifest into `MSGViewer-vX.Y.Z.flatpak` and publishes a GitHub release with it, the notes, and the Flathub manifest and `cargo-sources.json` (from `build-aux/flathub-manifest`, building from the tag).
+5. Copy those two files into the Flathub repository (`flathub/io.github.larsw.MSGViewer`; for the first release, a pull request to `flathub/flathub`'s `new-pr` branch).

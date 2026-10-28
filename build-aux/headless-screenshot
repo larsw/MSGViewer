@@ -4,6 +4,8 @@
 #   build-aux/headless-screenshot /tmp/shot.png outlook-msg/tests/samples/testMSG.msg
 # Files given are made readable to the sandbox directly, since the document
 # portal can't be mounted inside the nested session.
+# Set SHOT_WINDOW=1 to capture only the focused window (with its shadow), as
+# for store screenshots, and SHOT_DARK=1 for the dark style.
 # Set SHOT_DELAY (seconds, default 40) to change how long to wait, and MSGV_BRANCH to run
 # a build installed with flatpak-builder --default-branch=<branch>.
 # Every window holds a WebKit view, and WebKit waits for the nested session's
@@ -26,6 +28,12 @@ logdir=$(mktemp -d)
 # No notification banners (they can show account names) and no welcome tour.
 gsettings set org.gnome.desktop.notifications show-banners false
 gsettings set org.gnome.shell welcome-dialog-last-shown-version "'99999'"
+style=""
+if [ -n "${SHOT_DARK:-}" ]; then
+  gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+  # The sandboxed app can't read the nested session's style setting.
+  style=--env=ADW_DEBUG_COLOR_SCHEME=prefer-dark
+fi
 
 gnome-shell --headless --unsafe-mode --virtual-monitor 1100x800 \
   --wayland-display "$display" >"$logdir/shell.log" 2>&1 &
@@ -40,7 +48,7 @@ set -- $(for f in "$@"; do realpath "$f"; done)
 access=""
 for f in "$@"; do access="$access --filesystem=$(dirname "$f"):ro"; done
 WAYLAND_DISPLAY=$display flatpak run --user --no-documents-portal \
-  --env=ADW_DISABLE_PORTAL=1 --env=GDK_DEBUG=no-portals $access \
+  --env=ADW_DISABLE_PORTAL=1 --env=GDK_DEBUG=no-portals $style $access \
   "io.github.larsw.MSGViewer${MSGV_BRANCH:+//$MSGV_BRANCH}" "$@" >"$logdir/app.log" 2>&1 &
 app=$!
 sleep "${SHOT_DELAY:-40}"
@@ -50,9 +58,15 @@ gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
   --method org.gnome.Shell.Eval 'Main.overview.hide()' >/dev/null 2>&1 || true
 sleep 1
 
-gdbus call --session --dest org.gnome.Shell.Screenshot \
-  --object-path /org/gnome/Shell/Screenshot \
-  --method org.gnome.Shell.Screenshot.Screenshot false false "$out" >/dev/null
+if [ -n "${SHOT_WINDOW:-}" ]; then
+  gdbus call --session --dest org.gnome.Shell.Screenshot \
+    --object-path /org/gnome/Shell/Screenshot \
+    --method org.gnome.Shell.Screenshot.ScreenshotWindow true false false "$out" >/dev/null
+else
+  gdbus call --session --dest org.gnome.Shell.Screenshot \
+    --object-path /org/gnome/Shell/Screenshot \
+    --method org.gnome.Shell.Screenshot.Screenshot false false "$out" >/dev/null
+fi
 kill "$app" "$shell" 2>/dev/null || true
 wait 2>/dev/null || true
 echo "screenshot: $out"

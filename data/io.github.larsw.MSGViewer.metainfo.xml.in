@@ -13,7 +13,7 @@
       without Outlook.
     </p>
     <ul>
-      <li>Shows the subject, sender, date and recipients, then the message itself</li>
+      <li>Shows the subject, sender, date and recipients, then the message itself, including the images embedded in it</li>
       <li>Reads messages that Outlook stores as rich text (RTF), showing those written in rich text as plain text</li>
       <li>Blocks remote images and other remote content unless you load them for the message you’re reading</li>
       <li>Opens attachments in other apps or saves them, one by one or all at once, and warns before opening files that can run programs</li>
@@ -43,7 +43,22 @@
   <url type="bugtracker">https://github.com/larsw/MSGViewer/issues</url>
   <url type="vcs-browser">https://github.com/larsw/MSGViewer</url>
 
-  <!-- TODO(#15): add <screenshots> once they are taken; Flathub requires them. -->
+  <!-- Taken with build-aux/make-screenshots from made-up messages; the URLs
+       point at the release tag so they never change under a release. -->
+  <screenshots>
+    <screenshot type="default">
+      <caption>A message with its recipients, attachments and an embedded image</caption>
+      <image>https://raw.githubusercontent.com/larsw/MSGViewer/v1.0.0/data/screenshots/message.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The same message in the dark style</caption>
+      <image>https://raw.githubusercontent.com/larsw/MSGViewer/v1.0.0/data/screenshots/message-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Remote content stays blocked until you load it</caption>
+      <image>https://raw.githubusercontent.com/larsw/MSGViewer/v1.0.0/data/screenshots/remote-content.png</image>
+    </screenshot>
+  </screenshots>
 
   <branding>
     <color type="primary" scheme_preference="light">#99c1f1</color>
@@ -62,16 +77,17 @@
   </supports>
 
   <releases>
-    <release version="0.1.0" date="2026-10-28">
+    <release version="1.0.0" date="2026-10-28">
       <description>
         <p>The first release. MSG Viewer opens Outlook .msg files and shows:</p>
         <ul>
-          <li>The subject, sender, date and recipients</li>
-          <li>HTML and plain-text message bodies, with remote content blocked until you load it</li>
-          <li>Attachments, which can be opened in other apps or saved</li>
+          <li>The subject, sender, date and recipients, in the message’s own character set</li>
+          <li>HTML, rich-text (RTF) and plain-text message bodies, with embedded images, and remote content blocked until you load it</li>
+          <li>Attachments, which open in other apps or can be saved, with a warning before opening files that can run programs</li>
           <li>Messages attached to a message, in a window of their own</li>
-          <li>A notice for signed and encrypted messages</li>
+          <li>Meetings, contacts, tasks and notes, and a notice for signed and encrypted messages</li>
         </ul>
+        <p>You can also find text in a message, zoom it, choose the font messages are shown in, and drop files onto a window to open them.</p>
       </description>
     </release>
   </releases>

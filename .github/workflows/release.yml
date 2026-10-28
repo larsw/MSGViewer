@@ -1,0 +1,76 @@
+name: Release
+
+# Pushing a tag such as v1.0.0 builds the Flathub manifest into a Flatpak
+# bundle and publishes a GitHub release with it, the release notes from the
+# metainfo, and the files for the Flathub repository.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  notes:
+    name: Check versions and write release notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Fails unless the tag, meson.build, msg-viewer/Cargo.toml and the
+      # newest metainfo release all name the same version.
+      - run: build-aux/release-notes "$GITHUB_REF_NAME" > release-notes.md
+      - run: build-aux/flathub-manifest "$GITHUB_REF_NAME" "$GITHUB_SHA" flathub
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-files
+          path: |
+            release-notes.md
+            flathub/
+
+  bundle:
+    name: Flatpak bundle
+    needs: notes
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: build-aux/io.github.larsw.MSGViewer.json
+          bundle: MSGViewer-${{ github.ref_name }}.flatpak
+          build-dir: _build
+          upload-artifact: false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bundle
+          path: MSGViewer-${{ github.ref_name }}.flatpak
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: [notes, bundle]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "MSG Viewer $version" \
+            --notes-file artifacts/release-notes.md \
+            "artifacts/MSGViewer-$GITHUB_REF_NAME.flatpak" \
+            "artifacts/flathub/io.github.larsw.MSGViewer.json#Flathub manifest" \
+            "artifacts/flathub/cargo-sources.json#Flathub cargo-sources.json"
