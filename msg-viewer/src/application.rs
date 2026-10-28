@@ -5,6 +5,7 @@ use gtk::{gio, glib};
 
 use crate::attachment_open;
 use crate::config;
+use crate::preferences_dialog::PreferencesDialog;
 use crate::window::Window;
 
 mod imp {
@@ -76,12 +77,16 @@ impl Application {
         let quit = gio::ActionEntry::builder("quit")
             .activate(|app: &Self, _, _| app.quit())
             .build();
+        let preferences = gio::ActionEntry::builder("preferences")
+            .activate(|app: &Self, _, _| app.show_preferences())
+            .build();
         let about = gio::ActionEntry::builder("about")
             .activate(|app: &Self, _, _| app.show_about())
             .build();
-        self.add_action_entries([quit, about]);
+        self.add_action_entries([quit, preferences, about]);
 
         self.set_accels_for_action("app.quit", &["<primary>q"]);
+        self.set_accels_for_action("app.preferences", &["<primary>comma"]);
         self.set_accels_for_action("win.open", &["<primary>o"]);
         self.set_accels_for_action("window.close", &["<primary>w"]);
         self.set_accels_for_action("win.find", &["<primary>f"]);
@@ -94,6 +99,18 @@ impl Application {
         self.set_accels_for_action("win.zoom-out", &["<primary>minus", "<primary>KP_Subtract"]);
         self.set_accels_for_action("win.zoom-reset", &["<primary>0", "<primary>KP_0"]);
         // AdwApplication adds app.shortcuts (Ctrl+?) for shortcuts-dialog.ui.
+    }
+
+    fn show_preferences(&self) {
+        let window = self.active_window();
+        // Pressing Ctrl+, again while Preferences is open does nothing.
+        let shown = window
+            .and_downcast_ref::<adw::ApplicationWindow>()
+            .and_then(|window| window.visible_dialog())
+            .is_some_and(|dialog| dialog.is::<PreferencesDialog>());
+        if !shown {
+            PreferencesDialog::new().present(window.as_ref());
+        }
     }
 
     fn show_about(&self) {

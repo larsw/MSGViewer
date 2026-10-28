@@ -41,6 +41,24 @@ configure_file(
   install_dir: get_option('datadir') / 'dbus-1/services',
 )
 
+# The reader's preferences (msg-viewer/src/settings.rs). Compiled here too,
+# so GSETTINGS_SCHEMA_DIR can point at the build directory.
+gschema_file = '@0@.gschema.xml'.format(application_id)
+install_data(
+  gschema_file,
+  install_dir: get_option('datadir') / 'glib-2.0/schemas',
+)
+gnome.compile_schemas(depend_files: files(gschema_file))
+
+glib_compile_schemas = find_program('glib-compile-schemas', required: false)
+if glib_compile_schemas.found()
+  test(
+    'validate-schema',
+    glib_compile_schemas,
+    args: ['--strict', '--dry-run', meson.current_source_dir()],
+  )
+endif
+
 install_data(
   'icons/hicolor/scalable/apps/@0@.svg'.format(application_id),
   install_dir: get_option('datadir') / 'icons/hicolor/scalable/apps',

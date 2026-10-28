@@ -19,6 +19,7 @@
       <li>Opens attachments in other apps or saves them, one by one or all at once, and warns before opening files that can run programs</li>
       <li>Opens messages attached to a message in a window of their own</li>
       <li>Finds text in a message and zooms it</li>
+      <li>Shows messages in the font of your choice, keeping the fonts that formatted emails choose themselves</li>
       <li>Shows as much as it can of damaged files</li>
     </ul>
     <p>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="msg-viewer">
+  <schema id="io.github.larsw.MSGViewer" path="/io/github/larsw/MSGViewer/">
+    <key name="use-system-font" type="b">
+      <default>true</default>
+      <summary>Use the system font for messages</summary>
+      <description>Whether message bodies are shown in the system font. When false, the font in “body-font” is used.</description>
+    </key>
+    <key name="body-font" type="s">
+      <default>''</default>
+      <summary>Message font</summary>
+      <description>The font message bodies are shown in when “use-system-font” is false, as a Pango font description such as “Serif 12”. Messages that set their own fonts keep them. Empty means the system font.</description>
+    </key>
+    <key name="monospace-plain-text" type="b">
+      <default>false</default>
+      <summary>Use a monospace font for plain-text messages</summary>
+      <description>Whether plain-text message bodies are shown in the system monospace font, at the size of “body-font” when “use-system-font” is false.</description>
+    </key>
+  </schema>
+</schemalist>

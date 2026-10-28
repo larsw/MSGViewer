@@ -16,6 +16,7 @@
 //! Inline attachments always show: `cid:` links are served from the Message
 //! shown, never from the network (`inline.rs`).
 
+mod font;
 mod html;
 pub mod inline;
 mod plain_text;
@@ -23,7 +24,7 @@ mod remote_content;
 mod style;
 mod zoom;
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
@@ -36,9 +37,12 @@ use webkit6::{
     UserStyleLevel, UserStyleSheet,
 };
 
+use font::{FontPreferences, SystemFonts};
 use html::RemoteContent;
 use inline::InlineImages;
 use style::Surface;
+
+use crate::settings;
 
 /// The address of every Body this widget loads.
 const BODY_URI: &str = "about:blank";
@@ -69,12 +73,15 @@ mod imp {
         pub pending_load: RefCell<Option<(String, Surface, RemoteContent)>>,
         /// What the Body being shown is drawn on.
         pub surface: Cell<Surface>,
-        /// The style sheet giving the Body its colours.
+        /// The style sheet giving the Body its colours and font.
         pub style_sheet: RefCell<Option<UserStyleSheet>>,
         /// Set from loading a Body until the web view commits to showing it.
         /// Only then is navigating to `BODY_URI` allowed.
         pub loading_body: Cell<bool>,
         pub style_handlers: RefCell<Vec<glib::SignalHandlerId>>,
+        /// The reader's preferences, for the font the Body is shown in.
+        pub settings: OnceCell<gio::Settings>,
+        pub settings_handler: RefCell<Option<glib::SignalHandlerId>>,
         /// The images of the Message shown that `cid:` links can show.
         pub inline_images: RefCell<InlineImages>,
     }
@@ -110,6 +117,11 @@ mod imp {
             let style_manager = adw::StyleManager::default();
             for handler in self.style_handlers.take() {
                 style_manager.disconnect(handler);
+            }
+            if let (Some(settings), Some(handler)) =
+                (self.settings.get(), self.settings_handler.take())
+            {
+                settings.disconnect(handler);
             }
         }
     }
@@ -268,7 +280,10 @@ impl BodyView {
             glib::g_warning!("msg-viewer", "The Body's web process stopped: {reason:?}");
         });
 
-        // Plain-text Bodies follow the system style as it changes.
+        // Plain-text Bodies follow the system style as it changes, and every
+        // Body the font chosen in Preferences. The style sheet is replaced
+        // without reloading the Body, so Remote content the reader allowed
+        // stays loaded.
         let style_manager = adw::StyleManager::default();
         let update_style = glib::clone!(
             #[weak(rename_to = view)]
@@ -277,12 +292,25 @@ impl BodyView {
         );
         imp.style_handlers.replace(vec![
             style_manager.connect_dark_notify(update_style.clone()),
-            style_manager.connect_accent_color_rgba_notify(update_style),
+            style_manager.connect_accent_color_rgba_notify(update_style.clone()),
+            style_manager.connect_monospace_font_name_notify(update_style),
         ]);
+        let settings = imp.settings.get_or_init(settings::new);
+        // GSettings only reports changes to keys read since connecting, and
+        // update_style reads them all.
+        imp.settings_handler.replace(Some(settings.connect_changed(
+            None,
+            glib::clone!(
+                #[weak(rename_to = view)]
+                self,
+                move |_, _| view.update_style()
+            ),
+        )));
         self.update_style();
     }
 
-    /// Gives the Body the colours of its surface and the current system style.
+    /// Gives the Body the colours of its surface and the current system
+    /// style, and the font chosen in Preferences.
     fn update_style(&self) {
         let imp = self.imp();
         let Some(content_manager) = imp.web_view.user_content_manager() else {
@@ -290,8 +318,14 @@ impl BodyView {
         };
         let surface = imp.surface.get();
         let style_manager = adw::StyleManager::default();
+        let mut css =
+            surface.stylesheet(style_manager.is_dark(), &style_manager.accent_color_rgba());
+        if let Some(settings) = imp.settings.get() {
+            let preferences = FontPreferences::from_settings(settings);
+            css.push_str(&preferences.stylesheet(surface, &system_fonts(&style_manager)));
+        }
         let style_sheet = UserStyleSheet::new(
-            &surface.stylesheet(style_manager.is_dark(), &style_manager.accent_color_rgba()),
+            &css,
             UserContentInjectedFrames::TopFrame,
             UserStyleLevel::Author,
             &[],
@@ -470,10 +504,7 @@ fn locked_down_settings() -> webkit6::Settings {
         }
     }
 
-    let font = gtk::Settings::default()
-        .and_then(|gtk_settings| gtk_settings.gtk_font_name())
-        .map(|name| pango::FontDescription::from_string(&name));
-    if let Some(font) = font {
+    if let Some(font) = system_font() {
         if let Some(family) = font.family() {
             settings.set_default_font_family(&family);
         }
@@ -488,6 +519,25 @@ fn locked_down_settings() -> webkit6::Settings {
         }
     }
     settings
+}
+
+/// The system font, which Bodies use unless the reader chose another.
+pub fn system_font() -> Option<pango::FontDescription> {
+    gtk::Settings::default()
+        .and_then(|gtk_settings| gtk_settings.gtk_font_name())
+        .map(|name| pango::FontDescription::from_string(&name))
+}
+
+/// The system fonts a Body may be shown in.
+fn system_fonts(style_manager: &adw::StyleManager) -> SystemFonts {
+    let monospace = style_manager.monospace_font_name();
+    SystemFonts {
+        default: system_font(),
+        monospace: (!monospace.is_empty()).then(|| pango::FontDescription::from_string(&monospace)),
+        // WebKit's own conversion, which rounds to whole pixels; at 7200
+        // points the rounding is negligible.
+        pixels_per_point: f64::from(webkit6::Settings::font_size_to_pixels(7200)) / 7200.0,
+    }
 }
 
 /// Removes everything from the web view's context menu except copying.
