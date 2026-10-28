@@ -2,9 +2,11 @@
 //!
 //! By default a Body uses the system font, which the web view is given as
 //! its default font (see `locked_down_settings`), and nothing here applies.
-//! A chosen font is given to the Body's root element by a user style sheet
-//! with no specificity, so it is only the default: every rule in an HTML
-//! Body wins over it, and text the Body styles itself keeps its own font.
+//! A chosen font (family, size and face) is given to the Body's root element
+//! by a user style sheet with no specificity, so it is only the default:
+//! every rule in an HTML Body wins over it, and text the Body styles itself
+//! keeps its own font. Changing it replaces the style sheet and never
+//! reloads the Body.
 
 use std::fmt::Write;
 
@@ -38,7 +40,7 @@ pub struct FontPreferences {
 }
 
 /// The system fonts, and how WebKit turns points into CSS pixels.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SystemFonts {
     /// The font the web view uses by default.
     pub default: Option<pango::FontDescription>,
@@ -83,8 +85,8 @@ impl FontPreferences {
                 }
                 families.push_str("monospace");
             }
-            // A size is always given, as the generic monospace family is
-            // otherwise shown at WebKit's smaller fixed-width default size.
+            // A size is given whenever one is known, as the generic monospace
+            // family is otherwise shown at WebKit's smaller fixed-width size.
             let size = [self.custom.as_ref(), monospace, system.default.as_ref()]
                 .into_iter()
                 .flatten()
@@ -105,6 +107,9 @@ impl FontPreferences {
             }
             if let Some(style) = font_style(font) {
                 write!(declarations, " font-style: {style};").unwrap();
+            }
+            if let Some(stretch) = font_stretch(font) {
+                write!(declarations, " font-stretch: {stretch};").unwrap();
             }
         }
         if declarations.is_empty() {
@@ -182,6 +187,21 @@ fn font_style(font: &pango::FontDescription) -> Option<&'static str> {
     }
 }
 
+/// The width of `font` as a CSS `font-stretch`, unless it is normal.
+fn font_stretch(font: &pango::FontDescription) -> Option<&'static str> {
+    match font.stretch() {
+        pango::Stretch::UltraCondensed => Some("ultra-condensed"),
+        pango::Stretch::ExtraCondensed => Some("extra-condensed"),
+        pango::Stretch::Condensed => Some("condensed"),
+        pango::Stretch::SemiCondensed => Some("semi-condensed"),
+        pango::Stretch::SemiExpanded => Some("semi-expanded"),
+        pango::Stretch::Expanded => Some("expanded"),
+        pango::Stretch::ExtraExpanded => Some("extra-expanded"),
+        pango::Stretch::UltraExpanded => Some("ultra-expanded"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,12 +246,18 @@ mod tests {
     }
 
     #[test]
-    fn chosen_face_keeps_its_weight_and_style() {
+    fn chosen_face_keeps_its_weight_style_and_width() {
         let preferences = FontPreferences::new(false, "Cantarell Bold Italic 12", false);
         assert_eq!(
             sheet(&preferences, Surface::Paper),
             ":where(:root) { font-family: \"Cantarell\"; font-size: 16px; \
              font-weight: 700; font-style: italic; }\n"
+        );
+        let preferences = FontPreferences::new(false, "Noto Sans Semi-Light Condensed 9", false);
+        assert_eq!(
+            sheet(&preferences, Surface::System),
+            ":where(:root) { font-family: \"Noto Sans\"; font-size: 12px; \
+             font-weight: 350; font-stretch: condensed; }\n"
         );
     }
 

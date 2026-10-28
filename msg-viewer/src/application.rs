@@ -102,7 +102,15 @@ impl Application {
     }
 
     fn show_preferences(&self) {
-        PreferencesDialog::new().present(self.active_window().as_ref());
+        let window = self.active_window();
+        // Pressing Ctrl+, again while Preferences is open does nothing.
+        let shown = window
+            .and_downcast_ref::<adw::ApplicationWindow>()
+            .and_then(|window| window.visible_dialog())
+            .is_some_and(|dialog| dialog.is::<PreferencesDialog>());
+        if !shown {
+            PreferencesDialog::new().present(window.as_ref());
+        }
     }
 
     fn show_about(&self) {
