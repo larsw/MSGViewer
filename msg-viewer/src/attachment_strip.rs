@@ -140,21 +140,29 @@ impl AttachmentStrip {
     /// Opens one Attachment: an Embedded message in a new window, a file in
     /// another app, after a warning if it is a Risky attachment.
     async fn open(&self, index: usize, launch: Launch) {
-        let Some(attachment) = self.imp().attachments.borrow().get(index).cloned() else {
-            return;
-        };
-        if attachment.is_embedded_message() {
+        let embedded = self
+            .imp()
+            .attachments
+            .borrow()
+            .get(index)
+            .filter(|attachment| attachment.is_embedded_message())
+            .cloned();
+        if let Some(attachment) = embedded {
             self.open_embedded(attachment);
             return;
         }
-        let Some(data) = attachment.data() else {
+        let Some((name, data)) = self
+            .imp()
+            .attachments
+            .borrow()
+            .get(index)
+            .and_then(|a| Some((a.safe_file_name(), glib::Bytes::from(a.data()?))))
+        else {
             return;
         };
-        let name = attachment.safe_file_name();
-        if attachment_policy::is_risky(&name, data) && !self.confirm_risky(&name).await {
+        if attachment_policy::is_risky(&name, &data) && !self.confirm_risky(&name).await {
             return;
         }
-        let data = glib::Bytes::from(data);
         let result = match self.imp().copies.write(&name, data).await {
             Ok(file) => {
                 let ask = launch == Launch::ChooseApp;
