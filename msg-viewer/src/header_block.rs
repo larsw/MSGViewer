@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use adw::subclass::prelude::*;
 use gtk::glib;
 use gtk::prelude::*;
-use outlook_msg::{Mailbox, Message, RecipientKind};
+use outlook_msg::{Mailbox, Message, MessageKind, RecipientKind};
 
 /// How many recipients a collapsed recipient line shows.
 const COLLAPSED_COUNT: usize = 3;
@@ -18,11 +18,15 @@ mod imp {
     #[template(resource = "/io/github/larsw/MSGViewer/ui/header_block.ui")]
     pub struct HeaderBlock {
         #[template_child]
+        pub item_kind: TemplateChild<gtk::Label>,
+        #[template_child]
         pub subject: TemplateChild<gtk::Label>,
         #[template_child]
         pub sender: TemplateChild<gtk::Label>,
         #[template_child]
         pub date: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub recipient_lines: TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
         pub to_title: TemplateChild<gtk::Label>,
         #[template_child]
@@ -109,14 +113,19 @@ struct Line<'a> {
 impl HeaderBlock {
     pub fn set_message(&self, message: &Message) {
         let imp = self.imp();
+        let item_kind = match message.kind() {
+            MessageKind::Other(class) => item_kind(&class),
+            _ => None,
+        };
+        imp.item_kind.set_label(item_kind.unwrap_or_default());
+        imp.item_kind.set_visible(item_kind.is_some());
+
         imp.subject
             .set_label(message.subject().unwrap_or("(No Subject)"));
-        imp.sender.set_label(
-            &message
-                .sender()
-                .map(|sender| format_mailbox(&sender))
-                .unwrap_or_default(),
-        );
+        // Contacts, tasks and notes often have no sender.
+        let sender = message.sender().map(|sender| format_mailbox(&sender));
+        imp.sender.set_label(sender.as_deref().unwrap_or_default());
+        imp.sender.set_visible(sender.is_some());
 
         let date = message.date().and_then(format_date);
         imp.date.set_label(date.as_deref().unwrap_or_default());
@@ -126,6 +135,8 @@ impl HeaderBlock {
         for recipient in message.recipients() {
             recipients[index(recipient.kind)].push(format_mailbox(&recipient.mailbox));
         }
+        imp.recipient_lines
+            .set_visible(recipients.iter().any(|line| !line.is_empty()));
         imp.recipients.replace(recipients);
         imp.expanded.set([false; 3]);
         for kind in KINDS {
@@ -209,6 +220,53 @@ fn collapsible(recipients: &[String]) -> bool {
     recipients.len() > COLLAPSED_COUNT + 1
 }
 
+/// What kind of item a Message of another Message class is, in words, or
+/// `None` for a class with no better name than "message". Classes are
+/// matched without regard to case, and cover the classes derived from them.
+fn item_kind(class: &str) -> Option<&'static str> {
+    const KINDS: &[(&str, &str)] = &[
+        ("IPM.Appointment", "Appointment"),
+        ("IPM.Schedule.Meeting.Request", "Meeting Request"),
+        ("IPM.Schedule.Meeting.Canceled", "Meeting Canceled"),
+        ("IPM.Schedule.Meeting.Resp.Pos", "Meeting Accepted"),
+        (
+            "IPM.Schedule.Meeting.Resp.Tent",
+            "Meeting Tentatively Accepted",
+        ),
+        ("IPM.Schedule.Meeting.Resp.Neg", "Meeting Declined"),
+        ("IPM.Schedule.Meeting", "Meeting"),
+        ("IPM.Contact", "Contact"),
+        ("IPM.DistList", "Contact Group"),
+        ("IPM.Task", "Task"),
+        ("IPM.TaskRequest", "Task Request"),
+        ("IPM.StickyNote", "Note"),
+        ("IPM.Post", "Post"),
+        ("IPM.Activity", "Journal Entry"),
+    ];
+    let is = |base: &str| {
+        class.get(..base.len()).is_some_and(|start| {
+            start.eq_ignore_ascii_case(base)
+                && matches!(class.as_bytes().get(base.len()), None | Some(b'.'))
+        })
+    };
+    if let Some(&(_, kind)) = KINDS.iter().find(|(base, _)| is(base)) {
+        return Some(kind);
+    }
+    // Reports name the class of the Message they are about, and end in
+    // what they report ([MS-OXOMSG] 2.2.2.1).
+    if is("REPORT") {
+        let what = class.rsplit('.').next().unwrap_or_default();
+        return Some(match what.to_ascii_uppercase().as_str() {
+            "IPNRN" => "Read Receipt",
+            "IPNNRN" => "Not Read Notification",
+            "DR" => "Delivery Receipt",
+            "NDR" => "Delivery Failure",
+            _ => "Report",
+        });
+    }
+    None
+}
+
 /// Formats a Mailbox as `Name <address>`, or whichever half is known.
 fn format_mailbox(mailbox: &Mailbox) -> String {
     match (&mailbox.name, &mailbox.address) {
@@ -284,6 +342,26 @@ mod tests {
             &recipients[..COLLAPSED_COUNT]
         );
         assert_eq!(shown_recipients(&recipients, true), recipients);
+    }
+
+    #[test]
+    fn names_other_message_classes() {
+        assert_eq!(item_kind("IPM.Contact"), Some("Contact"));
+        assert_eq!(item_kind("ipm.contact.custom"), Some("Contact"));
+        assert_eq!(item_kind("IPM.Contacts"), None);
+        assert_eq!(
+            item_kind("IPM.Schedule.Meeting.Resp.Pos"),
+            Some("Meeting Accepted")
+        );
+        assert_eq!(
+            item_kind("IPM.Schedule.Meeting.Notification"),
+            Some("Meeting")
+        );
+        assert_eq!(item_kind("REPORT.IPM.Note.IPNRN"), Some("Read Receipt"));
+        assert_eq!(item_kind("REPORT.IPM.Note.NDR"), Some("Delivery Failure"));
+        assert_eq!(item_kind("REPORT"), Some("Report"));
+        assert_eq!(item_kind("IPM.Sharing"), None);
+        assert_eq!(item_kind("Élan"), None);
     }
 
     #[test]

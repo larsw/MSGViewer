@@ -6,6 +6,7 @@ use outlook_msg::Message;
 use crate::attachment_strip::AttachmentStrip;
 use crate::body_view::BodyView;
 use crate::header_block::HeaderBlock;
+use crate::protection_notice::{ProtectionNotice, protection_notice};
 
 mod imp {
     use super::*;
@@ -13,6 +14,10 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/larsw/MSGViewer/ui/message_view.ui")]
     pub struct MessageView {
+        #[template_child]
+        pub protection_banner: TemplateChild<adw::Banner>,
+        #[template_child]
+        pub protection_page: TemplateChild<adw::StatusPage>,
         #[template_child]
         pub header_block: TemplateChild<HeaderBlock>,
         #[template_child]
@@ -56,5 +61,38 @@ impl MessageView {
         self.imp().header_block.set_message(message);
         self.imp().attachment_strip.set_message(message);
         self.imp().body_view.set_message(message);
+        self.show_protection_notice(protection_notice(message));
+    }
+
+    /// Shows what a signed or encrypted Message needs, or hides the notices.
+    /// Call it after setting the Attachments and Body, whose visibility it
+    /// may change.
+    fn show_protection_notice(&self, notice: Option<ProtectionNotice>) {
+        let imp = self.imp();
+        let banner = match notice {
+            Some(ProtectionNotice::Banner(title)) => Some(title),
+            _ => None,
+        };
+        imp.protection_banner.set_title(banner.unwrap_or_default());
+        imp.protection_banner.set_revealed(banner.is_some());
+
+        let page = match notice {
+            Some(ProtectionNotice::Page {
+                icon_name,
+                title,
+                description,
+            }) => {
+                imp.protection_page.set_icon_name(Some(icon_name));
+                imp.protection_page.set_title(title);
+                imp.protection_page.set_description(Some(description));
+                true
+            }
+            _ => false,
+        };
+        imp.protection_page.set_visible(page);
+        imp.body_view.set_visible(!page);
+        if page {
+            imp.attachment_strip.set_visible(false);
+        }
     }
 }
