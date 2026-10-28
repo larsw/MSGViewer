@@ -1,4 +1,5 @@
 mod application;
+mod body_view;
 mod config;
 mod header_block;
 mod message_view;
