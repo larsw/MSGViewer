@@ -2,9 +2,10 @@
 # Runs a command inside the GNOME SDK with the Rust extension on PATH, e.g.
 #   build-aux/sdk-run cargo clippy --workspace --all-targets -- -D warnings
 # Needs: flatpak install --user flathub org.gnome.Sdk//51 org.freedesktop.Sdk.Extension.rust-stable//26.08
+# A system-wide install works too; CI uses one (.github/workflows/ci.yml).
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
-exec flatpak run --user --share=network --filesystem=home --filesystem="$root" \
+exec flatpak run --share=network --filesystem=home --filesystem="$root" \
   --env=PATH=/app/bin:/usr/bin:/usr/lib/sdk/rust-stable/bin \
   --env=CARGO_TARGET_DIR="$root/target/sdk" \
   --cwd="$root" --command=sh org.gnome.Sdk//51 -c '"$@"' sdk-run "$@"
