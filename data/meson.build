@@ -29,6 +29,18 @@ if appstreamcli.found()
   )
 endif
 
+# The desktop file is DBusActivatable, so the session bus starts the app
+# through this when it is launched or asked to open files.
+configure_file(
+  input: '@0@.service.in'.format(application_id),
+  output: '@0@.service'.format(application_id),
+  configuration: {
+    'application_id': application_id,
+    'bindir': get_option('prefix') / get_option('bindir'),
+  },
+  install_dir: get_option('datadir') / 'dbus-1/services',
+)
+
 install_data(
   'icons/hicolor/scalable/apps/@0@.svg'.format(application_id),
   install_dir: get_option('datadir') / 'icons/hicolor/scalable/apps',

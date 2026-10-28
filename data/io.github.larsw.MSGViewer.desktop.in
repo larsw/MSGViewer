@@ -10,3 +10,4 @@ Type=Application
 Categories=Office;Viewer;
 MimeType=application/vnd.ms-outlook;
 StartupNotify=true
+DBusActivatable=true
