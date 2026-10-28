@@ -98,5 +98,6 @@ fuzz_target!(|parts: Parts| {
     };
     if let Ok(message) = Message::from_bytes_with_limits(&bytes, limits) {
         let _ = (message.subject(), message.sender(), message.message_class());
+        let _ = message.body();
     }
 });

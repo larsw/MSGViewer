@@ -53,6 +53,11 @@ const PT_BINARY: u16 = 0x0102;
 const PID_MESSAGE_CODEPAGE: u16 = 0x3FFD;
 const PID_INTERNET_CODEPAGE: u16 = 0x3FDE;
 
+/// Properties kept as bytes even when stored as 8-bit strings, since their
+/// charset may not be the Message codepage: an HTML Body (`PidTagHtml`)
+/// declares its own.
+const KEEP_AS_BYTES: [u16; 1] = [0x1013];
+
 /// The encoding for 8-bit strings when no codepage is given.
 pub(crate) const DEFAULT_ENCODING: &Encoding = encoding_rs::WINDOWS_1252;
 
@@ -159,6 +164,11 @@ impl Properties {
             let ty = entry.ty();
             if matches!(ty, PT_STRING8 | PT_UNICODE | PT_BINARY) {
                 let stream = storage.join(format!("__substg1.0_{:08X}", entry.tag));
+                let ty = if ty == PT_STRING8 && KEEP_AS_BYTES.contains(&entry.id()) {
+                    PT_BINARY
+                } else {
+                    ty
+                };
                 if let Some(data) = reader.read_stream(&stream) {
                     values.insert(entry.id(), decode_variable(data, ty, encoding));
                 }

@@ -24,6 +24,7 @@
 mod attachment;
 mod body;
 mod error;
+mod html;
 mod kind;
 mod limits;
 mod message;

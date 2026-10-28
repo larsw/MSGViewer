@@ -5,7 +5,7 @@ use std::io::{Cursor, Write};
 use std::time::{Duration, SystemTime};
 
 use cfb::CompoundFile;
-use outlook_msg::{Mailbox, Message, Recipient, RecipientKind};
+use outlook_msg::{Body, Mailbox, Message, Recipient, RecipientKind};
 
 const PID_SUBJECT: u16 = 0x0037;
 const PID_CLIENT_SUBMIT_TIME: u16 = 0x0039;
@@ -14,6 +14,8 @@ const PID_SENDER_NAME: u16 = 0x0C1A;
 const PID_SENDER_ADDRTYPE: u16 = 0x0C1E;
 const PID_SENDER_EMAIL: u16 = 0x0C1F;
 const PID_MESSAGE_DELIVERY_TIME: u16 = 0x0E06;
+const PID_BODY: u16 = 0x1000;
+const PID_HTML: u16 = 0x1013;
 const PID_DISPLAY_NAME: u16 = 0x3001;
 const PID_ADDRTYPE: u16 = 0x3002;
 const PID_EMAIL_ADDRESS: u16 = 0x3003;
@@ -34,6 +36,7 @@ enum Value {
     Time(u64),
     String8(Vec<u8>),
     Unicode(String),
+    Binary(Vec<u8>),
 }
 
 type Props = Vec<(u16, Value)>;
@@ -84,6 +87,11 @@ fn write_storage(
                     Some(data),
                 )
             }
+            Value::Binary(data) => (
+                0x0102,
+                widen(&(data.len() as u32).to_le_bytes()),
+                Some(data.clone()),
+            ),
             Value::Unicode(s) => {
                 let mut data: Vec<u8> = s.encode_utf16().flat_map(u16::to_le_bytes).collect();
                 data.extend_from_slice(&[0, 0]);
@@ -386,6 +394,114 @@ fn sender_ignores_non_smtp_email() {
     );
 }
 
+fn html_body(props: Props) -> Option<String> {
+    match read(&props, &[]).body()? {
+        Body::Html(html) => Some(html),
+        Body::PlainText(_) => None,
+    }
+}
+
+#[test]
+fn html_body_is_preferred_over_plain_text() {
+    let msg = read(
+        &vec![
+            (PID_BODY, unicode("Plain")),
+            (PID_HTML, Value::Binary(b"<p>Rich</p>".to_vec())),
+        ],
+        &[],
+    );
+    assert_eq!(msg.body(), Some(Body::Html("<p>Rich</p>".into())));
+    assert_eq!(msg.plain_text_body(), Some("Plain"));
+}
+
+#[test]
+fn empty_html_body_falls_back_to_plain_text() {
+    let msg = read(
+        &vec![
+            (PID_BODY, unicode("Plain")),
+            (PID_HTML, Value::Binary(b" \r\n\0".to_vec())),
+        ],
+        &[],
+    );
+    assert_eq!(msg.body(), Some(Body::PlainText("Plain".into())));
+}
+
+#[test]
+fn html_body_charset_comes_from_meta_first() {
+    let html = b"<html><head><meta http-equiv=\"Content-Type\" \
+                 content=\"text/html; charset=windows-1251\"></head>\
+                 <body>\xcf\xf0\xe8\xe2\xe5\xf2</body></html>";
+    assert_eq!(
+        html_body(vec![
+            (PID_INTERNET_CODEPAGE, Value::Long(932)),
+            (PID_MESSAGE_CODEPAGE, Value::Long(1252)),
+            (PID_HTML, Value::Binary(html.to_vec())),
+        ])
+        .unwrap(),
+        "<html><head><meta http-equiv=\"Content-Type\" \
+         content=\"text/html; charset=windows-1251\"></head>\
+         <body>Привет</body></html>"
+    );
+}
+
+#[test]
+fn html_body_charset_falls_back_to_internet_then_message_codepage() {
+    let html = || Value::Binary(b"<p>\x8e\x52\x93\x63</p>\0".to_vec());
+    assert_eq!(
+        html_body(vec![
+            (PID_INTERNET_CODEPAGE, Value::Long(932)),
+            (PID_MESSAGE_CODEPAGE, Value::Long(1252)),
+            (PID_HTML, html()),
+        ]),
+        Some("<p>山田</p>".into())
+    );
+    assert_eq!(
+        html_body(vec![
+            (PID_INTERNET_CODEPAGE, Value::Long(1200)),
+            (PID_MESSAGE_CODEPAGE, Value::Long(932)),
+            (PID_HTML, html()),
+        ]),
+        Some("<p>山田</p>".into())
+    );
+    assert_eq!(
+        html_body(vec![(PID_HTML, html())]),
+        Some("<p>\u{17d}R\u{201c}c</p>".into())
+    );
+}
+
+#[test]
+fn string8_html_body_ignores_message_codepage_when_meta_says_otherwise() {
+    // 8-bit string Properties use the Message codepage, but the HTML Body
+    // declares its own charset.
+    let msg = read(
+        &vec![
+            (PID_MESSAGE_CODEPAGE, Value::Long(1251)),
+            (PID_SUBJECT, string8(b"\xcf\xf0\xe8\xe2\xe5\xf2")),
+            (
+                PID_HTML,
+                string8(b"<meta charset=\"utf-8\"><p>Gr\xc3\xbc\xc3\x9fe</p>"),
+            ),
+        ],
+        &[],
+    );
+    assert_eq!(msg.subject(), Some("Привет"));
+    assert_eq!(
+        msg.body(),
+        Some(Body::Html("<meta charset=\"utf-8\"><p>Grüße</p>".into()))
+    );
+}
+
+#[test]
+fn unicode_html_body_ignores_its_meta_charset() {
+    assert_eq!(
+        html_body(vec![(
+            PID_HTML,
+            unicode("<meta charset=\"big5\"><p>Grüße, 世界</p>")
+        )]),
+        Some("<meta charset=\"big5\"><p>Grüße, 世界</p>".into())
+    );
+}
+
 /// Writes generated `.msg` files for looking at the app with, e.g.
 /// `MSG_FIXTURE_DIR=/tmp/fixtures cargo test -p outlook-msg -- --ignored`.
 #[test]
@@ -420,4 +536,73 @@ fn write_fixtures() {
         &recipients,
     );
     std::fs::write(format!("{dir}/many-recipients.msg"), many).unwrap();
+
+    // Every way an HTML Body can ask for Remote content, each at its own
+    // path on MSG_FIXTURE_REMOTE (a local test server, 127.0.0.1:8765 by
+    // default), so its log shows what got through. Host names under
+    // .msgv-test.invalid show up only as DNS lookups.
+    let remote = std::env::var("MSG_FIXTURE_REMOTE").unwrap_or("127.0.0.1:8765".into());
+    let html = REMOTE_CONTENT_HTML.replace("{remote}", &remote);
+    let remote_content = build(
+        &vec![
+            (PID_SUBJECT, unicode("Remote content in every form")),
+            (PID_SENDER_NAME, unicode("Ada Lovelace")),
+            (PID_SENDER_ADDRTYPE, unicode("SMTP")),
+            (PID_SENDER_EMAIL, unicode("ada@example.org")),
+            (PID_CLIENT_SUBMIT_TIME, Value::Time(FILETIME_2023)),
+            (PID_BODY, unicode("Plain-text Body, not shown.")),
+            (PID_HTML, Value::Binary(html.into_bytes())),
+        ],
+        &[],
+    );
+    std::fs::write(format!("{dir}/remote-content.msg"), remote_content).unwrap();
 }
+
+const REMOTE_CONTENT_HTML: &str = r##"<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="x-dns-prefetch-control" content="on">
+<meta http-equiv="refresh" content="2;url=http://{remote}/meta-refresh">
+<base href="http://{remote}/base/">
+<link rel="stylesheet" href="http://{remote}/link-stylesheet.css">
+<link rel="preload" as="image" href="http://{remote}/link-preload.png">
+<link rel="prefetch" href="http://{remote}/link-prefetch">
+<link rel="preconnect" href="http://{remote}/">
+<link rel="preconnect" href="http://preconnect.msgv-test.invalid/">
+<link rel="dns-prefetch" href="http://dns-prefetch.msgv-test.invalid/">
+<link rel="icon" href="http://{remote}/link-icon.png">
+<script type="speculationrules">{"prefetch": [{"source": "list", "urls": ["http://{remote}/speculation-rules"]}]}</script>
+<script src="http://{remote}/script.js"></script>
+<style>
+@import url("http://{remote}/css-import.css");
+@font-face { font-family: Remote; src: url(http://{remote}/css-font.woff2) format("woff2"); }
+body { font-family: Remote, sans-serif; background-image: url('http://{remote}/css-background.png'); }
+.set { background-image: image-set("http://{remote}/css-image-set.png" 1x); }
+</style>
+</head>
+<body background="http://{remote}/body-background.png">
+<h1>Quarterly newsletter</h1>
+<p>Dear reader, this Message asks for Remote content in every way we know of.
+Read <a href="http://link.msgv-test.invalid/article" ping="http://{remote}/a-ping">the full article</a>.</p>
+<p>An image embedded in the Body: <img alt="embedded" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR42mPQW+BMEmIY1TCqYfhqAAAOjhEQeUYZuQAAAABJRU5ErkJggg==" width="16" height="16"></p>
+<p>Remote images:
+<img alt="img src" src="http://{remote}/img-src.png" width="40" height="40">
+<img alt="srcset" srcset="http://{remote}/img-srcset.png 1x, http://{remote}/img-srcset-2x.png 2x" width="40" height="40">
+<picture><source srcset="http://{remote}/picture-source.png"><img alt="picture" src="relative.png" width="40" height="40"></picture>
+<img alt="protocol-relative" src="//{remote}/protocol-relative.png" width="40" height="40">
+<img alt="lazy" loading="lazy" src="http://{remote}/img-lazy.png" width="40" height="40">
+<input type="image" alt="input" src="http://{remote}/input-image.png" width="40" height="40">
+<svg width="40" height="40"><image href="http://{remote}/svg-image.png" width="40" height="40"/><use href="http://{remote}/svg-use.svg#a"/></svg>
+</p>
+<table background="http://{remote}/table-background.png"><tr>
+<td style="background: url(http://{remote}/td-style.png)" width="120">Styled cell</td>
+<td class="set" width="120">image-set</td></tr></table>
+<p>An Inline attachment, not resolved yet: <img alt="cid" src="cid:image001.png@01D0A524.96D40F30" width="40" height="40"></p>
+<iframe src="http://{remote}/iframe.html" width="80" height="40"></iframe>
+<object data="http://{remote}/object.png" width="40" height="40"></object>
+<embed src="http://{remote}/embed.png" width="40" height="40">
+<video poster="http://{remote}/video-poster.png" src="http://{remote}/video.mp4" width="40" height="40"></video>
+<audio src="http://{remote}/audio.mp3"></audio>
+<form action="http://{remote}/form"><input name="q" value="form"></form>
+</body></html>
+"##;

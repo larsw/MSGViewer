@@ -2,9 +2,20 @@
 //!
 //! JavaScript is off, the view never navigates away from the Body it was
 //! given, links open in the browser through the OpenURI portal, and nothing
-//! is fetched from the network.
+//! is fetched from the network unless the reader allows Remote content for
+//! the Message shown.
+//!
+//! Remote content is kept out three ways, so that no single gap lets it
+//! through: a content filter blocks every load from a server
+//! (`remote_content.rs`), a Content Security Policy is put first in the
+//! Body (`html.rs`), and the web view's settings turn off DNS prefetching
+//! and connecting to servers ahead of time. Allowing Remote content lifts
+//! the filter and loosens the policy for that Message only, and is never
+//! remembered.
 
+mod html;
 mod plain_text;
+mod remote_content;
 mod style;
 mod zoom;
 
@@ -17,10 +28,11 @@ use outlook_msg::{Body, Message};
 use webkit6::prelude::*;
 use webkit6::{
     ContextMenuAction, NavigationPolicyDecision, NavigationType, PolicyDecision,
-    PolicyDecisionType, ResponsePolicyDecision, UserContentInjectedFrames, UserStyleLevel,
-    UserStyleSheet,
+    PolicyDecisionType, ResponsePolicyDecision, UserContentFilter, UserContentInjectedFrames,
+    UserStyleLevel, UserStyleSheet,
 };
 
+use html::RemoteContent;
 use style::Surface;
 
 /// The address of every Body this widget loads.
@@ -33,7 +45,21 @@ mod imp {
     #[template(resource = "/io/github/larsw/MSGViewer/ui/body_view.ui")]
     pub struct BodyView {
         #[template_child]
+        pub remote_content_banner: TemplateChild<adw::Banner>,
+        #[template_child]
         pub web_view: TemplateChild<webkit6::WebView>,
+        /// The HTML Body shown, as the Message has it.
+        pub html: RefCell<Option<String>>,
+        /// Whether the reader allowed Remote content for the Message shown.
+        pub remote_content: Cell<RemoteContent>,
+        /// The content filter blocking Remote content, once compiled; `None`
+        /// until then, or if it can't be.
+        pub filter: RefCell<Option<UserContentFilter>>,
+        /// Whether the content filter is in place, or known not to be
+        /// available. Nothing is loaded before then.
+        pub filter_ready: Cell<bool>,
+        /// What to load once the content filter is ready.
+        pub pending_load: RefCell<Option<(String, Surface, RemoteContent)>>,
         /// What the Body being shown is drawn on.
         pub surface: Cell<Surface>,
         /// The style sheet giving the Body its colours.
@@ -55,6 +81,9 @@ mod imp {
             webkit6::NetworkSession::ensure_type();
             webkit6::UserContentManager::ensure_type();
             klass.bind_template();
+            klass.install_action("body.load-remote-content", None, |view, _, _| {
+                view.load_remote_content();
+            });
         }
 
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -88,27 +117,104 @@ glib::wrapper! {
 }
 
 impl BodyView {
-    /// Shows the Body of `message`, or nothing if it has none.
+    /// Shows the Body of `message`, or nothing if it has none. Remote
+    /// content is blocked again, whatever the reader allowed before.
     pub fn set_message(&self, message: &Message) {
-        match message.body() {
-            Some(Body::PlainText(text)) => self.load(&plain_text::to_html(&text), Surface::System),
-            None => self.load("", Surface::System),
+        let imp = self.imp();
+        imp.remote_content.set(RemoteContent::Blocked);
+        let html = match message.body() {
+            Some(Body::Html(html)) => Some(html),
+            Some(Body::PlainText(text)) => {
+                let html = plain_text::to_html(&text);
+                self.load(html, Surface::System, RemoteContent::Blocked);
+                None
+            }
+            None => {
+                self.load(String::new(), Surface::System, RemoteContent::Blocked);
+                None
+            }
+        };
+        imp.remote_content_banner
+            .set_revealed(html.as_deref().is_some_and(html::references_remote_content));
+        imp.html.replace(html);
+        self.show_html();
+    }
+
+    /// Reloads the HTML Body with Remote content allowed. Only the Message
+    /// shown is affected, and nothing is remembered.
+    fn load_remote_content(&self) {
+        let imp = self.imp();
+        if imp.html.borrow().is_none() {
+            return;
+        }
+        imp.remote_content.set(RemoteContent::Allowed);
+        imp.remote_content_banner.set_revealed(false);
+        self.show_html();
+    }
+
+    /// Loads the HTML Body, if the Message has one, on the paper surface.
+    fn show_html(&self) {
+        let imp = self.imp();
+        let remote = imp.remote_content.get();
+        let html = imp
+            .html
+            .borrow()
+            .as_deref()
+            .map(|body| html::prepare(body, remote));
+        if let Some(html) = html {
+            self.load(html, Surface::Paper, remote);
         }
     }
 
-    /// Loads `html` as the Body, drawn on `surface`.
-    fn load(&self, html: &str, surface: Surface) {
+    /// Loads `html` as the Body, drawn on `surface`, with Remote content
+    /// blocked or not. Waits for the content filter first.
+    fn load(&self, html: String, surface: Surface, remote: RemoteContent) {
         let imp = self.imp();
+        if !imp.filter_ready.get() {
+            imp.pending_load.replace(Some((html, surface, remote)));
+            return;
+        }
+        if let (Some(filter), Some(content_manager)) =
+            (&*imp.filter.borrow(), imp.web_view.user_content_manager())
+        {
+            content_manager.remove_filter(filter);
+            if remote == RemoteContent::Blocked {
+                content_manager.add_filter(filter);
+            }
+        }
         imp.surface.set(surface);
         self.update_style();
         imp.loading_body.set(true);
-        imp.web_view.load_html(html, Some(BODY_URI));
+        imp.web_view.load_html(&html, Some(BODY_URI));
+    }
+
+    /// Puts the content filter blocking Remote content in place, and loads
+    /// whatever was waiting for it.
+    fn set_filter(&self, filter: Option<UserContentFilter>) {
+        let imp = self.imp();
+        if filter.is_none() {
+            glib::g_warning!(
+                "msg-viewer",
+                "No content filter; Remote content is kept out by the Body's \
+                 Content Security Policy and the web view's settings only"
+            );
+        }
+        imp.filter.replace(filter);
+        imp.filter_ready.set(true);
+        if let Some((html, surface, remote)) = imp.pending_load.take() {
+            self.load(html, surface, remote);
+        }
     }
 
     fn setup_web_view(&self) {
         let imp = self.imp();
         let web_view = &*imp.web_view;
         web_view.set_settings(&locked_down_settings());
+        remote_content::with_blocking_filter(glib::clone!(
+            #[weak(rename_to = view)]
+            self,
+            move |filter| view.set_filter(filter)
+        ));
 
         let view = self.downgrade();
         web_view.connect_decide_policy(move |_, decision, kind| {
@@ -300,8 +406,19 @@ impl BodyView {
     }
 }
 
+/// WebKit features that connect to servers without asking the Body's Content
+/// Security Policy: `<link rel=preconnect>` opens connections, and the
+/// others fetch pages ahead of time.
+const NETWORK_FEATURES: [&str; 4] = [
+    "LinkPreconnect",
+    "LinkPreconnectEarlyHints",
+    "LinkPrefetch",
+    "SpeculationRulesPrefetch",
+];
+
 /// Web view settings for showing a Body: no JavaScript, no plugins, media or
-/// storage, and the same font as the rest of the window.
+/// storage, nothing fetched or resolved ahead of time, and the same font as
+/// the rest of the window.
 fn locked_down_settings() -> webkit6::Settings {
     let settings = webkit6::Settings::new();
     settings.set_enable_javascript(false);
@@ -320,6 +437,16 @@ fn locked_down_settings() -> webkit6::Settings {
     settings.set_enable_webrtc(false);
     settings.set_enable_fullscreen(false);
     settings.set_enable_site_specific_quirks(false);
+    settings.set_enable_dns_prefetching(false);
+    settings.set_enable_hyperlink_auditing(false);
+    if let Some(features) = webkit6::Settings::all_features() {
+        for feature in (0..features.length()).filter_map(|i| features.get(i)) {
+            let identifier = feature.identifier().unwrap_or_default();
+            if NETWORK_FEATURES.contains(&identifier.as_str()) {
+                settings.set_feature_enabled(&feature, false);
+            }
+        }
+    }
 
     let font = gtk::Settings::default()
         .and_then(|gtk_settings| gtk_settings.gtk_font_name())
