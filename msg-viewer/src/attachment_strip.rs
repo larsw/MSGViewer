@@ -172,7 +172,11 @@ impl AttachmentStrip {
         };
         match result {
             Ok(()) => {}
-            Err(error) if error.matches(gtk::DialogError::Dismissed) => {}
+            // FileLauncher reports the reader cancelling the portal's app
+            // chooser as cancelled, not dismissed.
+            Err(error)
+                if error.matches(gtk::DialogError::Dismissed)
+                    || error.matches(gtk::DialogError::Cancelled) => {}
             Err(error) => self.show_error("Could Not Open Attachment", &error),
         }
     }
@@ -443,4 +447,85 @@ fn icon(attachment: &Attachment, name: &str) -> gio::Icon {
         }
     }
     gio::content_type_get_symbolic_icon(&content_type)
+}
+
+#[cfg(test)]
+mod tests {
+    use outlook_msg::Limits;
+
+    use super::*;
+
+    fn sample(bytes: &[u8]) -> Message {
+        Message::from_bytes(bytes).unwrap()
+    }
+
+    fn clicks(message: &Message) -> Vec<(String, bool)> {
+        message
+            .attachments()
+            .iter()
+            .map(|a| (a.safe_file_name(), opens_on_click(a)))
+            .collect()
+    }
+
+    #[test]
+    fn embedded_messages_and_pdfs_open_on_click() {
+        let message = sample(include_bytes!(
+            "../../outlook-msg/tests/samples/testMSG_att_msg.msg"
+        ));
+        let clicks = clicks(&message);
+        assert_eq!(clicks.len(), 2);
+        assert_eq!(clicks[0], ("Test Attachment.msg".to_owned(), true));
+        assert!(clicks[1].0.ends_with(".pdf"));
+        assert!(clicks[1].1);
+    }
+
+    #[test]
+    fn plain_text_opens_on_click_but_word_documents_show_the_menu() {
+        let message = sample(include_bytes!(
+            "../../outlook-msg/tests/samples/testMSG_att_doc.msg"
+        ));
+        let clicks = clicks(&message);
+        let by_extension = |extension: &str| {
+            clicks
+                .iter()
+                .find(|(name, _)| name.ends_with(extension))
+                .unwrap()
+                .1
+        };
+        assert!(!by_extension(".doc"));
+        assert!(by_extension(".txt"));
+    }
+
+    #[test]
+    fn images_open_on_click() {
+        let message = sample(include_bytes!(
+            "../../outlook-msg/tests/samples/test-outlook2003.msg"
+        ));
+        let images: Vec<_> = clicks(&message)
+            .into_iter()
+            .filter(|(name, _)| {
+                let name = name.to_lowercase();
+                [".png", ".jpg", ".jpeg", ".gif"]
+                    .iter()
+                    .any(|extension| name.ends_with(extension))
+            })
+            .collect();
+        assert!(!images.is_empty());
+        assert!(images.iter().all(|(_, opens)| *opens), "{images:?}");
+    }
+
+    #[test]
+    fn embedded_message_past_the_depth_limit_does_not_open() {
+        let bytes = include_bytes!("../../outlook-msg/tests/samples/testMSG_att_msg.msg");
+        let limits = Limits {
+            max_embedded_depth: 0,
+            ..Limits::DEFAULT
+        };
+        let message = Message::from_bytes_with_limits(bytes, limits).unwrap();
+        // The window's Partial read banner reports it.
+        assert!(message.is_partial());
+        let embedded = &message.attachments()[0];
+        assert!(embedded.is_embedded_message());
+        assert!(!opens_on_click(embedded));
+    }
 }
