@@ -26,7 +26,165 @@ template $MsgViewerHeaderBlock: Box {
     wrap: true;
     wrap-mode: word_char;
     selectable: true;
-    // Selectable labels select their text when they get initial focus.
     can-focus: false;
+
+    styles [
+      "heading",
+    ]
+  }
+
+  Label date {
+    xalign: 0;
+    wrap: true;
+    selectable: true;
+    can-focus: false;
+    visible: false;
+
+    styles [
+      "dim-label",
+    ]
+  }
+
+  // Expanded recipient lists can be long; they scroll rather than push the
+  // Body out of the window.
+  ScrolledWindow {
+    hscrollbar-policy: never;
+    propagate-natural-height: true;
+    max-content-height: 200;
+    margin-top: 6;
+
+    child: Grid {
+      column-spacing: 12;
+      row-spacing: 6;
+
+      Label to_title {
+        label: _("To");
+        xalign: 0;
+        valign: start;
+
+        layout {
+          column: 0;
+          row: 0;
+        }
+
+        styles [
+          "dim-label",
+        ]
+      }
+
+      Box to_box {
+        orientation: vertical;
+        hexpand: true;
+
+        layout {
+          column: 1;
+          row: 0;
+        }
+
+        Label to_list {
+          xalign: 0;
+          wrap: true;
+          wrap-mode: word_char;
+          selectable: true;
+          can-focus: false;
+
+          accessibility {
+            labelled-by: to_title;
+          }
+        }
+
+        Label to_expand {
+          xalign: 0;
+          halign: start;
+          use-markup: true;
+        }
+      }
+
+      Label cc_title {
+        label: _("Cc");
+        xalign: 0;
+        valign: start;
+
+        layout {
+          column: 0;
+          row: 1;
+        }
+
+        styles [
+          "dim-label",
+        ]
+      }
+
+      Box cc_box {
+        orientation: vertical;
+        hexpand: true;
+
+        layout {
+          column: 1;
+          row: 1;
+        }
+
+        Label cc_list {
+          xalign: 0;
+          wrap: true;
+          wrap-mode: word_char;
+          selectable: true;
+          can-focus: false;
+
+          accessibility {
+            labelled-by: cc_title;
+          }
+        }
+
+        Label cc_expand {
+          xalign: 0;
+          halign: start;
+          use-markup: true;
+        }
+      }
+
+      Label bcc_title {
+        label: _("Bcc");
+        xalign: 0;
+        valign: start;
+
+        layout {
+          column: 0;
+          row: 2;
+        }
+
+        styles [
+          "dim-label",
+        ]
+      }
+
+      Box bcc_box {
+        orientation: vertical;
+        hexpand: true;
+
+        layout {
+          column: 1;
+          row: 2;
+        }
+
+        Label bcc_list {
+          xalign: 0;
+          wrap: true;
+          wrap-mode: word_char;
+          selectable: true;
+          can-focus: false;
+
+          accessibility {
+            labelled-by: bcc_title;
+          }
+        }
+
+        Label bcc_expand {
+          xalign: 0;
+          halign: start;
+          use-markup: true;
+        }
+      }
+    };
   }
 }

@@ -21,14 +21,16 @@
 //!
 //! [MS-OXMSG]: https://learn.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-oxmsg/
 
+mod attachment;
 mod error;
 mod limits;
 mod message;
 mod props;
 mod reader;
 
+pub use attachment::{Attachment, sanitize_file_name};
 pub use error::Error;
 pub use limits::Limits;
-pub use message::{Mailbox, Message};
+pub use message::{Mailbox, Message, Recipient, RecipientKind};
 pub use props::{PropValue, Properties};
 pub use reader::Problem;

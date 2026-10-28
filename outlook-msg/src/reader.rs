@@ -14,8 +14,9 @@
 //! - List recipient or attachment storages with [`Reader::child_storages`],
 //!   passing the matching limit from [`Reader::limits`], so that the rest
 //!   are skipped and reported.
-//! - Read an Embedded message inside [`Reader::embedded`], which refuses to
-//!   go deeper than [`Limits::max_embedded_depth`].
+//! - Before reading an Embedded message, get the Limits to read it with from
+//!   [`Reader::embedded_limits`], which refuses to go deeper than
+//!   [`Limits::max_embedded_depth`].
 //! - For anything else that is wrong but can be skipped, call
 //!   [`Reader::problem`].
 
@@ -56,8 +57,6 @@ pub(crate) struct Reader<F> {
     limits: Limits,
     /// Bytes left of `limits.max_total_read`.
     budget: u64,
-    /// How many Embedded messages deep the current read is.
-    depth: usize,
     problems: Vec<Problem>,
 }
 
@@ -67,16 +66,18 @@ impl<F: Read + Seek> Reader<F> {
             file,
             budget: limits.max_total_read,
             limits,
-            depth: 0,
             problems: Vec::new(),
         }
     }
 
-    // For recipient, Attachment and Embedded message parsing, which is still
-    // to come.
-    #[allow(dead_code)]
     pub(crate) fn limits(&self) -> &Limits {
         &self.limits
+    }
+
+    /// The compound file, for looking at its directory. Read stream data
+    /// through the Reader instead, so that it counts against the limits.
+    pub(crate) fn file(&self) -> &CompoundFile<F> {
+        &self.file
     }
 
     pub(crate) fn is_stream(&self, path: &Path) -> bool {
@@ -151,62 +152,67 @@ impl<F: Read + Seek> Reader<F> {
         }
     }
 
-    /// The storages directly inside `parent` whose names start with
-    /// `prefix`, such as `__recip_version1.0_#`, in name order. Past `limit`
-    /// the rest are skipped and a Problem is recorded.
-    #[allow(dead_code)]
+    /// The numbered storages directly inside `parent`, named `prefix`
+    /// followed by an 8-digit hex number, such as `__recip_version1.0_#`
+    /// ([MS-OXMSG] 2.2.1), in number order. Past `limit` the rest are
+    /// skipped and a Problem is recorded.
     pub(crate) fn child_storages(
         &mut self,
         parent: &Path,
         prefix: &str,
         limit: usize,
     ) -> Vec<PathBuf> {
-        let mut storages: Vec<PathBuf> = match self.file.read_storage(parent) {
+        let mut storages: Vec<(u32, PathBuf)> = match self.file.read_storage(parent) {
             Ok(entries) => entries
-                .filter(|entry| entry.is_storage() && entry.name().starts_with(prefix))
-                .map(|entry| entry.path().to_path_buf())
+                .filter(|entry| entry.is_storage())
+                .filter_map(|entry| {
+                    Some((
+                        storage_number(entry.name(), prefix)?,
+                        entry.path().to_owned(),
+                    ))
+                })
                 .collect(),
             Err(error) => {
                 self.problem(parent, error);
                 return Vec::new();
             }
         };
-        storages.sort();
+        storages.sort_unstable();
         if storages.len() > limit {
             let skipped = storages.len() - limit;
             storages.truncate(limit);
             self.problem(
                 parent,
-                format!("{skipped} {prefix}* storages over the limit of {limit} were skipped"),
+                format!("{skipped} {prefix} storages over the limit of {limit} were skipped"),
             );
         }
-        storages
+        storages.into_iter().map(|(_, path)| path).collect()
     }
 
-    /// Runs `read` one Embedded message deeper. Past
-    /// [`Limits::max_embedded_depth`] it records a Problem instead, and
-    /// returns `None`.
-    #[allow(dead_code)]
-    pub(crate) fn embedded<T>(
-        &mut self,
-        path: &Path,
-        read: impl FnOnce(&mut Self) -> T,
-    ) -> Option<T> {
-        if self.depth >= self.limits.max_embedded_depth {
-            self.problem(
-                path,
-                format!(
-                    "Embedded message nested more than {} deep was skipped",
-                    self.limits.max_embedded_depth
-                ),
-            );
-            return None;
+    /// The Limits to read the Embedded message at `path` with, one level
+    /// less deep than this Reader's. Past [`Limits::max_embedded_depth`] it
+    /// records a Problem instead, and returns `None`.
+    pub(crate) fn embedded_limits(&mut self, path: &Path) -> Option<Limits> {
+        match self.limits.max_embedded_depth.checked_sub(1) {
+            Some(depth) => Some(Limits {
+                max_embedded_depth: depth,
+                ..self.limits
+            }),
+            None => {
+                self.problem(path, "Embedded message nested too deep was skipped");
+                None
+            }
         }
-        self.depth += 1;
-        let result = read(self);
-        self.depth -= 1;
-        Some(result)
     }
+}
+
+/// The number in a storage name, `prefix` then 8 hex digits.
+fn storage_number(name: &str, prefix: &str) -> Option<u32> {
+    let hex = name.strip_prefix(prefix)?;
+    if hex.len() != 8 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    u32::from_str_radix(hex, 16).ok()
 }
 
 #[cfg(test)]
@@ -304,39 +310,55 @@ mod tests {
     }
 
     #[test]
-    fn lists_child_storages_up_to_limit() {
+    fn lists_child_storages_in_number_order_up_to_limit() {
         let bytes = compound_file(|file| {
-            for i in (0..5).rev() {
-                file.create_storage(format!("/__recip_version1.0_#{i:08X}"))
+            for i in [0x10, 2, 0, 0xA, 1] {
+                file.create_storage(format!("/__recip_version1.0_#{i:08x}"))
                     .unwrap();
             }
+            file.create_storage("/__recip_version1.0_#0000000").unwrap();
             file.create_storage("/__attach_version1.0_#00000000")
                 .unwrap();
-            write_stream(file, "/__recip_version1.0_#stream", b"");
+            write_stream(file, "/__recip_version1.0_#00000003", b"");
         });
         let mut reader = reader(&bytes, Limits::DEFAULT);
-        let recipients = reader.child_storages(Path::new("/"), "__recip_version1.0_#", 3);
+        let recipients = reader.child_storages(Path::new("/"), "__recip_version1.0_#", 4);
         assert_eq!(
             recipients,
-            [0, 1, 2].map(|i| PathBuf::from(format!("/__recip_version1.0_#{i:08X}")))
+            [0, 1, 2, 0xA].map(|i| PathBuf::from(format!("/__recip_version1.0_#{i:08x}")))
         );
         assert_eq!(reader.into_problems().len(), 1);
     }
 
     #[test]
-    fn caps_embedded_message_depth() {
-        fn nest(reader: &mut Reader<Cursor<&[u8]>>) -> usize {
-            reader
-                .embedded(Path::new("/"), nest)
-                .map_or(0, |depth| depth + 1)
-        }
+    fn parses_storage_number() {
+        let prefix = "__recip_version1.0_#";
+        assert_eq!(
+            storage_number("__recip_version1.0_#0000000A", prefix),
+            Some(10)
+        );
+        assert_eq!(storage_number("__recip_version1.0_#0000000", prefix), None);
+        assert_eq!(storage_number("__recip_version1.0_#+0000000", prefix), None);
+        assert_eq!(
+            storage_number("__attach_version1.0_#00000000", prefix),
+            None
+        );
+    }
+
+    #[test]
+    fn embedded_limits_count_down_depth() {
         let bytes = compound_file(|_| {});
         let limits = Limits {
-            max_embedded_depth: 3,
+            max_embedded_depth: 1,
             ..Limits::DEFAULT
         };
-        let mut reader = reader(&bytes, limits);
-        assert_eq!(nest(&mut reader), 3);
-        assert_eq!(reader.into_problems().len(), 1);
+        let mut outer = reader(&bytes, limits);
+        let inner_limits = outer.embedded_limits(Path::new("/a")).unwrap();
+        assert_eq!(inner_limits.max_embedded_depth, 0);
+        assert!(outer.into_problems().is_empty());
+
+        let mut inner = reader(&bytes, inner_limits);
+        assert_eq!(inner.embedded_limits(Path::new("/a")), None);
+        assert_eq!(inner.into_problems().len(), 1);
     }
 }

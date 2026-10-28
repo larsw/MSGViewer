@@ -29,14 +29,22 @@ pub struct Limits {
     /// Deepest Embedded message read: 1 allows Embedded messages in the
     /// top-level Message, but none inside those.
     ///
+    /// An Embedded message is read later, from
+    /// [`Attachment::embedded_message`](crate::Attachment::embedded_message),
+    /// with the same Limits but this one less; an Embedded message deeper
+    /// than this is left out, and recorded as a Problem of the Message that
+    /// carries it.
+    ///
     /// Forwarding a Message as an attachment again and again rarely goes
     /// more than a few levels deep. 10 leaves room for that, while keeping a
     /// hostile file from nesting Messages until the stack overflows.
     pub max_embedded_depth: usize,
     /// Most recipients read for one Message; the rest are skipped.
     ///
-    /// Exchange Online allows at most 1,000 recipients per message, and
-    /// that only when an administrator raises the default of 500.
+    /// A `.msg` file may hold at most 2048 recipient storages
+    /// ([MS-OXMSG] 2.2.1); Exchange Online allows at most 1,000 recipients
+    /// per message, and that only when an administrator raises the default
+    /// of 500.
     pub max_recipients: usize,
     /// Most Attachments read for one Message; the rest are skipped.
     ///
