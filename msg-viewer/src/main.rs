@@ -1,4 +1,6 @@
 mod application;
+mod attachment_save;
+mod attachment_strip;
 mod config;
 mod header_block;
 mod message_view;

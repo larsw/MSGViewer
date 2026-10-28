@@ -1,6 +1,7 @@
 blueprints = custom_target(
   'blueprints',
   input: files(
+    'ui/attachment_strip.blp',
     'ui/header_block.blp',
     'ui/message_view.blp',
     'ui/window.blp',
