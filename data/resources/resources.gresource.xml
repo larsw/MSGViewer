@@ -5,5 +5,6 @@
     <file preprocess="xml-stripblanks">ui/message_view.ui</file>
     <file preprocess="xml-stripblanks">ui/header_block.ui</file>
     <file preprocess="xml-stripblanks">ui/attachment_strip.ui</file>
+    <file preprocess="xml-stripblanks">ui/body_view.ui</file>
   </gresource>
 </gresources>

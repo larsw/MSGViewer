@@ -1,0 +1,27 @@
+using Gtk 4.0;
+using WebKit 6.0;
+
+template $MsgViewerBodyView: Box {
+  orientation: vertical;
+
+  Separator {}
+
+  // Bars about the Body, such as Remote content being blocked, go here.
+
+  WebKit.WebView web_view {
+    vexpand: true;
+
+    // Nothing is stored on disk, and nothing carries over between windows.
+    network-session: WebKit.NetworkSession {
+      is-ephemeral: true;
+    };
+
+    user-content-manager: WebKit.UserContentManager {};
+
+    // The web view is transparent for plain-text Bodies, so this draws their
+    // background.
+    styles [
+      "view",
+    ]
+  }
+}

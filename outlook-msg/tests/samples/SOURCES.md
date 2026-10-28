@@ -11,6 +11,7 @@ Every file here must be redistributable under terms compatible with Apache-2.0. 
 | `testMSG_forwarded.msg` | Apache Tika, same directory, `testMSG_forwarded.msg` (`main`, fetched 2026-10-28). Exchange recipient with an SMTP address. | Apache-2.0 |
 | `testMSG_att_doc.msg` | Apache Tika, same directory, `testMSG_att_doc.msg` (`main`, fetched 2026-10-28). Attachments with long and 8.3 names. | Apache-2.0 |
 | `testMSG_att_msg.msg` | Apache Tika, same directory, `testMSG_att_msg.msg` (`main`, fetched 2026-10-28). An Embedded message and a PDF. | Apache-2.0 |
+| `test-outlook2003.msg` | Apache Tika, same directory, `test-outlook2003.msg` (`main`, fetched 2026-10-28). Unicode plain-text Body; Inline attachments. | Apache-2.0 |
 
 Apache Tika is licensed Apache-2.0, and its `LICENSE.txt` lists no other terms for these files (it does for some other test documents, such as `testDXF.dxf`).
 

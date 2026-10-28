@@ -4,6 +4,7 @@ use gtk::prelude::*;
 use outlook_msg::Message;
 
 use crate::attachment_strip::AttachmentStrip;
+use crate::body_view::BodyView;
 use crate::header_block::HeaderBlock;
 
 mod imp {
@@ -16,6 +17,8 @@ mod imp {
         pub header_block: TemplateChild<HeaderBlock>,
         #[template_child]
         pub attachment_strip: TemplateChild<AttachmentStrip>,
+        #[template_child]
+        pub body_view: TemplateChild<BodyView>,
     }
 
     #[glib::object_subclass]
@@ -27,6 +30,7 @@ mod imp {
         fn class_init(klass: &mut Self::Class) {
             HeaderBlock::ensure_type();
             AttachmentStrip::ensure_type();
+            BodyView::ensure_type();
             klass.bind_template();
         }
 
@@ -51,5 +55,6 @@ impl MessageView {
     pub fn set_message(&self, message: &Message) {
         self.imp().header_block.set_message(message);
         self.imp().attachment_strip.set_message(message);
+        self.imp().body_view.set_message(message);
     }
 }

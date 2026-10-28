@@ -7,5 +7,9 @@ template $MsgViewerMessageView: Box {
 
   $MsgViewerAttachmentStrip attachment_strip {}
 
-  // The Body follows the attachment strip.
+  // The Body fills the rest of the window and scrolls by itself, so the
+  // Header block and attachment strip stay in view.
+  $MsgViewerBodyView body_view {
+    vexpand: true;
+  }
 }

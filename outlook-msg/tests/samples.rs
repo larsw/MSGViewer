@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime};
 
-use outlook_msg::{Error, Mailbox, Message, Recipient, RecipientKind};
+use outlook_msg::{Body, Error, Mailbox, Message, Recipient, RecipientKind};
 
 const PID_ATTACH_FILENAME: u16 = 0x3704;
 const CFB_MAGIC: &[u8] = &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
@@ -168,4 +168,21 @@ fn reads_embedded_message_and_file_attachments() {
     );
     assert_eq!(pdf.size(), Some(13539));
     assert!(pdf.data().unwrap().starts_with(b"%PDF-1.4"));
+}
+
+#[test]
+fn reads_string8_plain_text_body() {
+    let msg = sample("testMSG.msg");
+    let body = msg.plain_text_body().unwrap();
+    assert!(body.starts_with("Hi,\r\n\r\nAs discussed, I've been working"));
+    assert!(body.ends_with("Jukka Zitting\r\n"));
+    assert_eq!(msg.body(), Some(Body::PlainText(body.to_owned())));
+}
+
+#[test]
+fn reads_unicode_plain_text_body() {
+    let msg = sample("test-outlook2003.msg");
+    let body = msg.plain_text_body().unwrap();
+    assert!(body.contains("Thank you for using Microsoft® Office Outlook® 2003!"));
+    assert!(body.contains("<http://r.office.microsoft.com/r/rlidwelcomeFAQ?clid=1033>"));
 }
