@@ -2,11 +2,22 @@ use std::cell::{Cell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::{gio, glib};
+use gtk::{gdk, gio, glib};
 use outlook_msg::{Attachment, Message};
 
 use crate::application::Application;
+use crate::find_bar::FindBar;
 use crate::message_view::MessageView;
+
+/// Actions that only make sense while a Message is shown.
+const MESSAGE_ACTIONS: [&str; 6] = [
+    "win.find",
+    "win.find-next",
+    "win.find-previous",
+    "win.zoom-in",
+    "win.zoom-out",
+    "win.zoom-reset",
+];
 
 mod imp {
     use super::*;
@@ -14,6 +25,8 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/larsw/MSGViewer/ui/window.ui")]
     pub struct Window {
+        #[template_child]
+        pub find_bar: TemplateChild<FindBar>,
         #[template_child]
         pub partial_banner: TemplateChild<adw::Banner>,
         #[template_child]
@@ -36,9 +49,26 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             MessageView::ensure_type();
+            FindBar::ensure_type();
             klass.bind_template();
             klass.install_action_async("win.open", None, |win, _, _| async move {
                 win.choose_file().await;
+            });
+            klass.install_action("win.find", None, |win, _, _| win.imp().find_bar.open());
+            klass.install_action("win.find-next", None, |win, _, _| {
+                win.imp().find_bar.find_next();
+            });
+            klass.install_action("win.find-previous", None, |win, _, _| {
+                win.imp().find_bar.find_previous();
+            });
+            klass.install_action("win.zoom-in", None, |win, _, _| {
+                win.imp().message_view.body_view().zoom_in();
+            });
+            klass.install_action("win.zoom-out", None, |win, _, _| {
+                win.imp().message_view.body_view().zoom_out();
+            });
+            klass.install_action("win.zoom-reset", None, |win, _, _| {
+                win.imp().message_view.body_view().zoom_reset();
             });
         }
 
@@ -47,7 +77,12 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for Window {}
+    impl ObjectImpl for Window {
+        fn constructed(&self) {
+            self.parent_constructed();
+            self.obj().setup_conveniences();
+        }
+    }
     impl WidgetImpl for Window {}
     impl WindowImpl for Window {}
     impl ApplicationWindowImpl for Window {}
@@ -149,7 +184,12 @@ impl Window {
             }
         };
 
-        // Each file gets its own window; reuse this one only while it is empty.
+        self.open_here_or_in_new_window(file);
+    }
+
+    /// Each file gets its own window; this one is reused only while it is
+    /// empty.
+    fn open_here_or_in_new_window(&self, file: gio::File) {
         if self.is_empty() {
             self.open_file(file);
         } else if let Some(app) = self.application().and_downcast::<Application>() {
@@ -157,6 +197,69 @@ impl Window {
             window.present();
             window.open_file(file);
         }
+    }
+}
+
+/// Dropping files, finding text and zooming.
+impl Window {
+    fn setup_conveniences(&self) {
+        let imp = self.imp();
+        imp.find_bar.set_body_view(&imp.message_view.body_view());
+        imp.stack.connect_visible_child_name_notify(glib::clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| win.update_message_actions()
+        ));
+        self.update_message_actions();
+        self.setup_drop_target();
+    }
+
+    fn update_message_actions(&self) {
+        let showing_message = self.imp().stack.visible_child_name().as_deref() == Some("message");
+        for action in MESSAGE_ACTIONS {
+            self.action_set_enabled(action, showing_message);
+        }
+        if !showing_message {
+            self.imp().find_bar.close();
+        }
+    }
+
+    /// Opens files dropped anywhere on the window, the Body included.
+    fn setup_drop_target(&self) {
+        let Some(content) = self.content() else {
+            return;
+        };
+        let target = gtk::DropTarget::new(glib::Type::INVALID, gdk::DragAction::COPY);
+        target.set_types(&[gdk::FileList::static_type(), gio::File::static_type()]);
+        // Ahead of the Body's web view, which would take the drop itself.
+        target.set_propagation_phase(gtk::PropagationPhase::Capture);
+        target.connect_drop(glib::clone!(
+            #[weak(rename_to = win)]
+            self,
+            #[upgrade_or]
+            false,
+            move |_, value, _, _| {
+                let files = dropped_files(value);
+                for file in &files {
+                    win.open_here_or_in_new_window(file.clone());
+                }
+                !files.is_empty()
+            }
+        ));
+        // Highlighted by style.css while a drag is over it.
+        content.add_css_class("drop-target");
+        content.add_controller(target);
+    }
+}
+
+/// The files in a drop, which is either a list of files or one file.
+fn dropped_files(value: &glib::Value) -> Vec<gio::File> {
+    if let Ok(list) = value.get::<gdk::FileList>() {
+        list.files()
+    } else if let Ok(file) = value.get::<gio::File>() {
+        vec![file]
+    } else {
+        Vec::new()
     }
 }
 
@@ -213,6 +316,26 @@ fn describe_parse_error(error: &outlook_msg::Error) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drops_carry_one_or_more_files() {
+        let paths = |files: Vec<gio::File>| -> Vec<_> {
+            files.iter().filter_map(|file| file.path()).collect()
+        };
+        let one = gio::File::for_path("/tmp/a.msg");
+        let two = gio::File::for_path("/tmp/b.msg");
+
+        let list = gdk::FileList::from_array(&[one.clone(), two.clone()]);
+        assert_eq!(
+            paths(dropped_files(&list.to_value())),
+            ["/tmp/a.msg", "/tmp/b.msg"].map(std::path::PathBuf::from)
+        );
+        assert_eq!(
+            paths(dropped_files(&one.to_value())),
+            [std::path::PathBuf::from("/tmp/a.msg")]
+        );
+        assert!(dropped_files(&"text".to_value()).is_empty());
+    }
 
     #[test]
     fn unreadable_file_reason_hides_parser_details() {

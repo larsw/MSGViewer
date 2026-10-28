@@ -6,6 +6,7 @@
 
 mod plain_text;
 mod style;
+mod zoom;
 
 use std::cell::{Cell, RefCell};
 
@@ -230,6 +231,72 @@ impl BodyView {
                 glib::g_warning!("msg-viewer", "Could not open link: {error}");
             }
         });
+    }
+}
+
+/// Finding text in the Body, and zooming it.
+impl BodyView {
+    /// Finds `text` in the Body, ignoring case, and highlights the matches.
+    /// Empty text ends the search.
+    pub fn find(&self, text: &str) {
+        let Some(controller) = self.find_controller() else {
+            return;
+        };
+        if text.is_empty() {
+            controller.search_finish();
+            return;
+        }
+        let options = webkit6::FindOptions::CASE_INSENSITIVE | webkit6::FindOptions::WRAP_AROUND;
+        controller.search(text, options.bits(), u32::MAX);
+    }
+
+    /// Moves to the next match, wrapping around at the end.
+    pub fn find_next(&self) {
+        if let Some(controller) = self.find_controller() {
+            controller.search_next();
+        }
+    }
+
+    /// Moves to the previous match, wrapping around at the start.
+    pub fn find_previous(&self) {
+        if let Some(controller) = self.find_controller() {
+            controller.search_previous();
+        }
+    }
+
+    /// Ends the search and removes its highlights.
+    pub fn find_finish(&self) {
+        if let Some(controller) = self.find_controller() {
+            controller.search_finish();
+        }
+    }
+
+    /// Calls `callback` after each search with whether the text was found.
+    pub fn connect_find_result<F: Fn(bool) + Clone + 'static>(&self, callback: F) {
+        let Some(controller) = self.find_controller() else {
+            return;
+        };
+        let found = callback.clone();
+        controller.connect_found_text(move |_, _| found(true));
+        controller.connect_failed_to_find_text(move |_| callback(false));
+    }
+
+    pub fn zoom_in(&self) {
+        let web_view = &self.imp().web_view;
+        web_view.set_zoom_level(zoom::larger(web_view.zoom_level()));
+    }
+
+    pub fn zoom_out(&self) {
+        let web_view = &self.imp().web_view;
+        web_view.set_zoom_level(zoom::smaller(web_view.zoom_level()));
+    }
+
+    pub fn zoom_reset(&self) {
+        self.imp().web_view.set_zoom_level(zoom::DEFAULT);
+    }
+
+    fn find_controller(&self) -> Option<webkit6::FindController> {
+        self.imp().web_view.find_controller()
     }
 }
 

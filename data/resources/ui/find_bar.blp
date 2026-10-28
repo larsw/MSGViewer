@@ -1,0 +1,59 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $MsgViewerFindBar: Adw.Bin {
+  child: SearchBar search_bar {
+    child: Box {
+      spacing: 6;
+
+      SearchEntry entry {
+        placeholder-text: _("Find in Message");
+        width-chars: 28;
+
+        ShortcutController {
+          // Before the entry's own Enter, which finds the next match.
+          propagation-phase: capture;
+
+          Shortcut {
+            trigger: "<Shift>Return|<Shift>KP_Enter|<Shift>ISO_Enter";
+            action: "action(win.find-previous)";
+          }
+        }
+      }
+
+      Label no_results {
+        label: _("No Results");
+        visible: false;
+
+        styles [
+          "dim-label",
+        ]
+      }
+
+      Box {
+        styles [
+          "linked",
+        ]
+
+        Button {
+          icon-name: "go-up-symbolic";
+          tooltip-text: _("Previous Match");
+          action-name: "win.find-previous";
+        }
+
+        Button {
+          icon-name: "go-down-symbolic";
+          tooltip-text: _("Next Match");
+          action-name: "win.find-next";
+        }
+      }
+    };
+  };
+
+  ShortcutController {
+    Shortcut {
+      trigger: "Escape";
+      action: "action(find.close)";
+    }
+  }
+}

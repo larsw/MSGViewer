@@ -1,0 +1,6 @@
+/* A file dragged over a window. An outline is drawn over the content,
+ * where Adwaita's own drop highlight would be hidden by the Body. */
+.drop-target:drop(active) {
+  outline: 2px solid var(--accent-bg-color);
+  outline-offset: -2px;
+}

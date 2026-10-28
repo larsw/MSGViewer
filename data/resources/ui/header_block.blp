@@ -8,6 +8,18 @@ template $MsgViewerHeaderBlock: Box {
   margin-start: 18;
   margin-end: 18;
 
+  // What kind of item a Message of another Message class is, such as
+  // "Contact".
+  Label item_kind {
+    xalign: 0;
+    visible: false;
+
+    styles [
+      "caption-heading",
+      "dim-label",
+    ]
+  }
+
   Label subject {
     xalign: 0;
     wrap: true;
@@ -46,9 +58,13 @@ template $MsgViewerHeaderBlock: Box {
   }
 
   // Expanded recipient lists can be long; they scroll rather than push the
-  // Body out of the window.
-  ScrolledWindow {
+  // Body out of the window. Hidden when there are none, as for most
+  // contacts and notes. The scrollbar is only turned on when they don't
+  // fit, since a scrolled window is never shorter than its scrollbar
+  // (HeaderBlock::fit_recipients).
+  ScrolledWindow recipient_lines {
     hscrollbar-policy: never;
+    vscrollbar-policy: external;
     propagate-natural-height: true;
     max-content-height: 200;
     margin-top: 6;

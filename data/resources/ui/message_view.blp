@@ -1,7 +1,11 @@
 using Gtk 4.0;
+using Adw 1;
 
 template $MsgViewerMessageView: Box {
   orientation: vertical;
+
+  // Says that a signed Message's signature isn't checked.
+  Adw.Banner protection_banner {}
 
   $MsgViewerHeaderBlock header_block {}
 
@@ -11,5 +15,16 @@ template $MsgViewerMessageView: Box {
   // Header block and attachment strip stay in view.
   $MsgViewerBodyView body_view {
     vexpand: true;
+  }
+
+  // Takes the place of the Attachments and Body of a signed or encrypted
+  // Message whose content can't be shown.
+  Adw.StatusPage protection_page {
+    visible: false;
+    vexpand: true;
+
+    styles [
+      "compact",
+    ]
   }
 }

@@ -12,9 +12,14 @@ Every file here must be redistributable under terms compatible with Apache-2.0. 
 | `testMSG_att_doc.msg` | Apache Tika, same directory, `testMSG_att_doc.msg` (`main`, fetched 2026-10-28). Attachments with long and 8.3 names. | Apache-2.0 |
 | `testMSG_att_msg.msg` | Apache Tika, same directory, `testMSG_att_msg.msg` (`main`, fetched 2026-10-28). An Embedded message and a PDF. | Apache-2.0 |
 | `test-outlook2003.msg` | Apache Tika, same directory, `test-outlook2003.msg` (`main`, fetched 2026-10-28). Unicode plain-text Body; Inline attachments. | Apache-2.0 |
+| `testMSG_Appointment.msg` | Apache Tika, same directory, `testMSG_Appointment.msg` (`main`, fetched 2026-10-28). Message class `IPM.Appointment`. | Apache-2.0 |
+| `testMSG_Contact.msg` | Apache Tika, same directory, `testMSG_Contact.msg` (`main`, fetched 2026-10-28). Message class `IPM.Contact`; no recipients. | Apache-2.0 |
+| `testMSG_Task.msg` | Apache Tika, same directory, `testMSG_Task.msg` (`main`, fetched 2026-10-28). Message class `IPM.Task`. | Apache-2.0 |
+| `testMSG_StickyNote.msg` | Apache Tika, same directory, `testMSG_StickyNote.msg` (`main`, fetched 2026-10-28). Message class `IPM.StickyNote`; no sender. | Apache-2.0 |
+| `testMSG_Post.msg` | Apache Tika, same directory, `testMSG_Post.msg` (`main`, fetched 2026-10-28). Message class `IPM.Post`. | Apache-2.0 |
 
 Apache Tika is licensed Apache-2.0, and its `LICENSE.txt` lists no other terms for these files (it does for some other test documents, such as `testDXF.dxf`).
 
-Edge cases (codepages, missing Properties, many recipients) are covered by small files that `tests/generated.rs` builds at test time rather than by checked-in samples.
+Edge cases (codepages, missing Properties, many recipients, signed and encrypted Messages) are covered by small files that `tests/generated.rs` builds at test time rather than by checked-in samples.
 
 Real `.msg` files for local testing go in `/tests/local/` at the repository root, which git ignores. Never commit them.
