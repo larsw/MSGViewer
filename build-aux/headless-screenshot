@@ -1,0 +1,40 @@
+#!/bin/sh
+# Runs the installed Flatpak inside a throwaway headless GNOME Shell and saves
+# a screenshot, without touching the real desktop session. Example:
+#   build-aux/headless-screenshot /tmp/shot.png outlook-msg/tests/samples/testMSG.msg
+# Files given are made readable to the sandbox directly, since the document
+# portal can't be mounted inside the nested session.
+# Set SHOT_DELAY (seconds, default 4) for slower startups.
+set -eu
+if [ -z "${DBUS_SESSION_BUS_ADDRESS_HEADLESS:-}" ]; then
+  DBUS_SESSION_BUS_ADDRESS_HEADLESS=1 exec timeout 120 dbus-run-session -- "$0" "$@"
+fi
+out=$(realpath -m "$1"); shift
+display=msgv-shot-$$
+logdir=$(mktemp -d)
+
+gnome-shell --headless --unsafe-mode --virtual-monitor 1100x800 \
+  --wayland-display "$display" >"$logdir/shell.log" 2>&1 &
+shell=$!
+for _ in $(seq 1 100); do
+  gdbus introspect --session --dest org.gnome.Shell.Screenshot \
+    --object-path /org/gnome/Shell/Screenshot >/dev/null 2>&1 && break
+  sleep 0.2
+done
+
+set -- $(for f in "$@"; do realpath "$f"; done)
+access=""
+for f in "$@"; do access="$access --filesystem=$(dirname "$f"):ro"; done
+WAYLAND_DISPLAY=$display flatpak run --user --no-documents-portal \
+  --env=ADW_DISABLE_PORTAL=1 --env=GDK_DEBUG=no-portals $access \
+  io.github.larsw.MSGViewer "$@" >"$logdir/app.log" 2>&1 &
+app=$!
+sleep "${SHOT_DELAY:-4}"
+
+gdbus call --session --dest org.gnome.Shell.Screenshot \
+  --object-path /org/gnome/Shell/Screenshot \
+  --method org.gnome.Shell.Screenshot.Screenshot false false "$out" >/dev/null
+kill "$app" "$shell" 2>/dev/null || true
+wait 2>/dev/null || true
+echo "screenshot: $out"
+echo "app log: $logdir/app.log"

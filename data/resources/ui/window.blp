@@ -1,0 +1,86 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $MsgViewerWindow: Adw.ApplicationWindow {
+  default-width: 800;
+  default-height: 700;
+  width-request: 360;
+  height-request: 294;
+  title: _("MSG Viewer");
+
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [start]
+      Button {
+        icon-name: "document-open-symbolic";
+        tooltip-text: _("Open…");
+        action-name: "win.open";
+      }
+
+      [end]
+      MenuButton {
+        primary: true;
+        icon-name: "open-menu-symbolic";
+        tooltip-text: _("Main Menu");
+        menu-model: primary_menu;
+      }
+    }
+
+    content: Stack stack {
+      transition-type: crossfade;
+
+      StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage {
+          icon-name: "mail-unread-symbolic";
+          title: _("Open a Message");
+          description: _("Choose an Outlook .msg file to read it");
+
+          child: Button {
+            label: _("_Open…");
+            use-underline: true;
+            halign: center;
+            action-name: "win.open";
+
+            styles [
+              "pill",
+              "suggested-action",
+            ]
+          };
+        };
+      }
+
+      StackPage {
+        name: "message";
+        child: $MsgViewerMessageView message_view {};
+      }
+
+      StackPage {
+        name: "error";
+
+        child: Adw.StatusPage error_page {
+          icon-name: "dialog-error-symbolic";
+          title: _("Could Not Open File");
+        };
+      }
+    };
+  };
+}
+
+menu primary_menu {
+  section {
+    item {
+      label: _("_Open…");
+      action: "win.open";
+    }
+  }
+
+  section {
+    item {
+      label: _("_About MSG Viewer");
+      action: "app.about";
+    }
+  }
+}

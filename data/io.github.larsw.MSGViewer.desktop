@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=MSG Viewer
+Comment=Read Outlook message files
+Exec=msg-viewer %U
+Icon=io.github.larsw.MSGViewer
+Terminal=false
+Type=Application
+Categories=Office;Viewer;
+Keywords=email;mail;outlook;msg;
+MimeType=application/vnd.ms-outlook;
+StartupNotify=true

@@ -1,0 +1,32 @@
+using Gtk 4.0;
+
+template $MsgViewerHeaderBlock: Box {
+  orientation: vertical;
+  spacing: 6;
+  margin-top: 18;
+  margin-bottom: 12;
+  margin-start: 18;
+  margin-end: 18;
+
+  Label subject {
+    xalign: 0;
+    wrap: true;
+    wrap-mode: word_char;
+    selectable: true;
+    // Selectable labels select their text when they get initial focus.
+    can-focus: false;
+
+    styles [
+      "title-2",
+    ]
+  }
+
+  Label sender {
+    xalign: 0;
+    wrap: true;
+    wrap-mode: word_char;
+    selectable: true;
+    // Selectable labels select their text when they get initial focus.
+    can-focus: false;
+  }
+}

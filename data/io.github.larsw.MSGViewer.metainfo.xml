@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.larsw.MSGViewer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+
+  <name>MSG Viewer</name>
+  <summary>Read Outlook message files</summary>
+  <description>
+    <p>
+      MSG Viewer opens Microsoft Outlook .msg files, such as emails saved
+      from Outlook or forwarded as attachments, so you can read them without
+      Outlook.
+    </p>
+  </description>
+
+  <developer id="io.github.larsw">
+    <name>Lars Wilhelmsen</name>
+  </developer>
+
+  <launchable type="desktop-id">io.github.larsw.MSGViewer.desktop</launchable>
+  <provides>
+    <mediatype>application/vnd.ms-outlook</mediatype>
+  </provides>
+
+  <url type="homepage">https://github.com/larsw/gnome-msg-viewer</url>
+  <url type="bugtracker">https://github.com/larsw/gnome-msg-viewer/issues</url>
+  <url type="vcs-browser">https://github.com/larsw/gnome-msg-viewer</url>
+
+  <content_rating type="oars-1.1" />
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-28">
+      <description>
+        <p>First development snapshot: opens a message and shows its subject and sender.</p>
+      </description>
+    </release>
+  </releases>
+</component>
