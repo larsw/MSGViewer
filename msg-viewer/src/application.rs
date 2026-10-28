@@ -103,8 +103,8 @@ impl Application {
             .version(config::VERSION)
             .developer_name("Lars Wilhelmsen")
             .license_type(gtk::License::Apache20)
-            .website("https://github.com/larsw/gnome-msg-viewer")
-            .issue_url("https://github.com/larsw/gnome-msg-viewer/issues")
+            .website("https://github.com/larsw/MSGViewer")
+            .issue_url("https://github.com/larsw/MSGViewer/issues")
             // Translators: Replace with your names, one per line, in the
             // form "Name <email or website>".
             .translator_credits(gettext("translator-credits"))

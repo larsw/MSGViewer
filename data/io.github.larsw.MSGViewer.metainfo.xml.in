@@ -38,9 +38,9 @@
     <mediatype>application/vnd.ms-outlook</mediatype>
   </provides>
 
-  <url type="homepage">https://github.com/larsw/gnome-msg-viewer</url>
-  <url type="bugtracker">https://github.com/larsw/gnome-msg-viewer/issues</url>
-  <url type="vcs-browser">https://github.com/larsw/gnome-msg-viewer</url>
+  <url type="homepage">https://github.com/larsw/MSGViewer</url>
+  <url type="bugtracker">https://github.com/larsw/MSGViewer/issues</url>
+  <url type="vcs-browser">https://github.com/larsw/MSGViewer</url>
 
   <!-- TODO(#15): add <screenshots> once they are taken; Flathub requires them. -->
 
