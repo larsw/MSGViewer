@@ -4,7 +4,8 @@
 #   build-aux/headless-screenshot /tmp/shot.png outlook-msg/tests/samples/testMSG.msg
 # Files given are made readable to the sandbox directly, since the document
 # portal can't be mounted inside the nested session.
-# Set SHOT_DELAY (seconds, default 4) for slower startups.
+# Set SHOT_DELAY (seconds, default 4) for slower startups, and MSGV_BRANCH to run
+# a build installed with flatpak-builder --default-branch=<branch>.
 set -eu
 if [ -z "${DBUS_SESSION_BUS_ADDRESS_HEADLESS:-}" ]; then
   DBUS_SESSION_BUS_ADDRESS_HEADLESS=1 exec timeout 120 dbus-run-session -- "$0" "$@"
@@ -27,7 +28,7 @@ access=""
 for f in "$@"; do access="$access --filesystem=$(dirname "$f"):ro"; done
 WAYLAND_DISPLAY=$display flatpak run --user --no-documents-portal \
   --env=ADW_DISABLE_PORTAL=1 --env=GDK_DEBUG=no-portals $access \
-  io.github.larsw.MSGViewer "$@" >"$logdir/app.log" 2>&1 &
+  "io.github.larsw.MSGViewer${MSGV_BRANCH:+//$MSGV_BRANCH}" "$@" >"$logdir/app.log" 2>&1 &
 app=$!
 sleep "${SHOT_DELAY:-4}"
 

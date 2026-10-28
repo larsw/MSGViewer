@@ -20,6 +20,7 @@ The app crate needs GTK, libadwaita and WebKitGTK from the GNOME SDK, so build a
 
 - Lint and test: `build-aux/sdk-run cargo clippy --workspace --all-targets -- -D warnings` and `build-aux/sdk-run cargo test --workspace`
 - Build and install the Flatpak: `flatpak run --user org.flatpak.Builder --user --install --force-clean --state-dir=.flatpak-builder _build build-aux/io.github.larsw.MSGViewer.json`
+- When several builds are in progress at once (for example in separate worktrees), add `--default-branch=<name>` to the Flatpak build so each installs side by side, and set `MSGV_BRANCH=<name>` for the screenshot script
 - See it running without touching the desktop: `build-aux/headless-screenshot OUT.png [FILE.msg...]` runs the installed Flatpak in a throwaway headless GNOME Shell and saves a screenshot
 
 Sample `.msg` files live in `outlook-msg/tests/samples/`, with their source and license recorded in `SOURCES.md` there.
