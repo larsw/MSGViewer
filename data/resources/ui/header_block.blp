@@ -1,5 +1,7 @@
 using Gtk 4.0;
 
+translation-domain "msg-viewer";
+
 template $MsgViewerHeaderBlock: Box {
   orientation: vertical;
   spacing: 6;
@@ -74,6 +76,8 @@ template $MsgViewerHeaderBlock: Box {
       row-spacing: 6;
 
       Label to_title {
+        // Translators: Heads the recipients of a message, as in an email
+        // header; likewise "Cc" and "Bcc".
         label: _("To");
         xalign: 0;
         valign: start;

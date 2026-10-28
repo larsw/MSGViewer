@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.larsw.MSGViewer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+
+  <name>MSG Viewer</name>
+  <summary>Read Outlook message files</summary>
+  <description>
+    <p>
+      MSG Viewer opens Microsoft Outlook .msg files, such as emails saved
+      from Outlook or sent to you as attachments, so you can read them
+      without Outlook.
+    </p>
+    <ul>
+      <li>Shows the subject, sender, date and recipients, then the message itself</li>
+      <li>Blocks remote images and other remote content unless you load them for the message you’re reading</li>
+      <li>Opens attachments in other apps or saves them, one by one or all at once, and warns before opening files that can run programs</li>
+      <li>Opens messages attached to a message in a window of their own</li>
+      <li>Finds text in a message and zooms it</li>
+      <li>Shows as much as it can of damaged files</li>
+    </ul>
+    <p>
+      MSG Viewer only reads messages. It doesn’t send mail or connect to
+      mail accounts.
+    </p>
+  </description>
+
+  <developer id="io.github.larsw">
+    <name translate="no">Lars Wilhelmsen</name>
+  </developer>
+
+  <launchable type="desktop-id">io.github.larsw.MSGViewer.desktop</launchable>
+  <translation type="gettext">msg-viewer</translation>
+  <provides>
+    <binary>msg-viewer</binary>
+    <mediatype>application/vnd.ms-outlook</mediatype>
+  </provides>
+
+  <url type="homepage">https://github.com/larsw/gnome-msg-viewer</url>
+  <url type="bugtracker">https://github.com/larsw/gnome-msg-viewer/issues</url>
+  <url type="vcs-browser">https://github.com/larsw/gnome-msg-viewer</url>
+
+  <!-- TODO(#15): add <screenshots> once they are taken; Flathub requires them. -->
+
+  <branding>
+    <color type="primary" scheme_preference="light">#99c1f1</color>
+    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+  </branding>
+
+  <content_rating type="oars-1.1" />
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-28">
+      <description>
+        <p>The first release. MSG Viewer opens Outlook .msg files and shows:</p>
+        <ul>
+          <li>The subject, sender, date and recipients</li>
+          <li>HTML and plain-text message bodies, with remote content blocked until you load it</li>
+          <li>Attachments, which can be opened in other apps or saved</li>
+          <li>Messages attached to a message, in a window of their own</li>
+          <li>A notice for signed and encrypted messages</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

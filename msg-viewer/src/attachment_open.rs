@@ -14,6 +14,7 @@ use std::io;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
+use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
@@ -63,7 +64,8 @@ impl TempCopies {
         if !file.has_parent(Some(&folder)) {
             return Err(glib::Error::new(
                 gio::IOErrorEnum::InvalidFilename,
-                &format!("“{name}” is not a valid file name"),
+                // Translators: {name} is the Attachment's file name.
+                &gettext("“{name}” is not a valid file name").replace("{name}", name),
             ));
         }
         attachment_save::save_to_file(&file, data).await?;
@@ -112,8 +114,13 @@ pub async fn launch(
 /// Makes a new folder only this user can enter, with a random name inside
 /// `parent`.
 fn make_private_folder(parent: &Path) -> io::Result<PathBuf> {
-    glib::mkdtemp(parent.join("XXXXXX"))
-        .ok_or_else(|| io::Error::other(format!("Could not create a folder in {parent:?}")))
+    glib::mkdtemp(parent.join("XXXXXX")).ok_or_else(|| {
+        // Translators: {folder} is where the copy of an Attachment goes.
+        io::Error::other(
+            gettext("Could not create a folder in {folder}")
+                .replace("{folder}", &parent.display().to_string()),
+        )
+    })
 }
 
 fn remove_folder(folder: &Path) {

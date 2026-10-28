@@ -1,5 +1,6 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::{gio, glib};
 
 use crate::attachment_open;
@@ -97,13 +98,16 @@ impl Application {
 
     fn show_about(&self) {
         let dialog = adw::AboutDialog::builder()
-            .application_name("MSG Viewer")
+            .application_name(gettext("MSG Viewer"))
             .application_icon(config::APP_ID)
             .version(config::VERSION)
             .developer_name("Lars Wilhelmsen")
             .license_type(gtk::License::Apache20)
             .website("https://github.com/larsw/gnome-msg-viewer")
             .issue_url("https://github.com/larsw/gnome-msg-viewer/issues")
+            // Translators: Replace with your names, one per line, in the
+            // form "Name <email or website>".
+            .translator_credits(gettext("translator-credits"))
             .build();
         dialog.present(self.active_window().as_ref());
     }

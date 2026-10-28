@@ -2,9 +2,12 @@ use std::cell::{Cell, RefCell};
 use std::time::SystemTime;
 
 use adw::subclass::prelude::*;
+use gettextrs::{gettext, ngettext};
 use gtk::glib;
 use gtk::prelude::*;
 use outlook_msg::{Mailbox, Message, MessageKind, RecipientKind};
+
+use crate::i18n::gettext_noop;
 
 /// How many recipients a collapsed recipient line shows.
 const COLLAPSED_COUNT: usize = 3;
@@ -122,11 +125,13 @@ impl HeaderBlock {
             MessageKind::Other(class) => item_kind(&class),
             _ => None,
         };
-        imp.item_kind.set_label(item_kind.unwrap_or_default());
+        imp.item_kind
+            .set_label(&item_kind.map(gettext).unwrap_or_default());
         imp.item_kind.set_visible(item_kind.is_some());
 
+        let no_subject = gettext("(No Subject)");
         imp.subject
-            .set_label(message.subject().unwrap_or("(No Subject)"));
+            .set_label(message.subject().unwrap_or(&no_subject));
         // Contacts, tasks and notes often have no sender.
         let sender = message.sender().map(|sender| format_mailbox(&sender));
         imp.sender.set_label(sender.as_deref().unwrap_or_default());
@@ -216,10 +221,14 @@ impl HeaderBlock {
         let hidden = recipients.len() - shown.len();
         line.expand.set_visible(collapsible(recipients));
         let text = if expanded {
-            "Show Less".to_owned()
+            gettext("Show Less")
         } else {
-            format!("Show {hidden} More")
+            // Translators: A link that shows all of a recipient line;
+            // {count} is the number of recipients it hides, always 2 or more.
+            ngettext("Show {count} More", "Show {count} More", hidden as u32)
+                .replace("{count}", &hidden.to_string())
         };
+        let text = glib::markup_escape_text(&text);
         line.expand.set_markup(&format!("<a href=\"#\">{text}</a>"));
     }
 }
@@ -255,25 +264,40 @@ fn fits(height: i32, max_height: i32) -> bool {
 /// What kind of item a Message of another Message class is, in words, or
 /// `None` for a class with no better name than "message". Classes are
 /// matched without regard to case, and cover the classes derived from them.
+/// The words are untranslated; pass them to `gettext`.
 fn item_kind(class: &str) -> Option<&'static str> {
     const KINDS: &[(&str, &str)] = &[
-        ("IPM.Appointment", "Appointment"),
-        ("IPM.Schedule.Meeting.Request", "Meeting Request"),
-        ("IPM.Schedule.Meeting.Canceled", "Meeting Canceled"),
-        ("IPM.Schedule.Meeting.Resp.Pos", "Meeting Accepted"),
+        ("IPM.Appointment", gettext_noop("Appointment")),
+        (
+            "IPM.Schedule.Meeting.Request",
+            gettext_noop("Meeting Request"),
+        ),
+        (
+            "IPM.Schedule.Meeting.Canceled",
+            gettext_noop("Meeting Canceled"),
+        ),
+        (
+            "IPM.Schedule.Meeting.Resp.Pos",
+            gettext_noop("Meeting Accepted"),
+        ),
         (
             "IPM.Schedule.Meeting.Resp.Tent",
-            "Meeting Tentatively Accepted",
+            gettext_noop("Meeting Tentatively Accepted"),
         ),
-        ("IPM.Schedule.Meeting.Resp.Neg", "Meeting Declined"),
-        ("IPM.Schedule.Meeting", "Meeting"),
-        ("IPM.Contact", "Contact"),
-        ("IPM.DistList", "Contact Group"),
-        ("IPM.Task", "Task"),
-        ("IPM.TaskRequest", "Task Request"),
-        ("IPM.StickyNote", "Note"),
-        ("IPM.Post", "Post"),
-        ("IPM.Activity", "Journal Entry"),
+        (
+            "IPM.Schedule.Meeting.Resp.Neg",
+            gettext_noop("Meeting Declined"),
+        ),
+        ("IPM.Schedule.Meeting", gettext_noop("Meeting")),
+        ("IPM.Contact", gettext_noop("Contact")),
+        ("IPM.DistList", gettext_noop("Contact Group")),
+        ("IPM.Task", gettext_noop("Task")),
+        ("IPM.TaskRequest", gettext_noop("Task Request")),
+        // Translators: An Outlook sticky note.
+        ("IPM.StickyNote", gettext_noop("Note")),
+        // Translators: A post in an Outlook public folder.
+        ("IPM.Post", gettext_noop("Post")),
+        ("IPM.Activity", gettext_noop("Journal Entry")),
     ];
     let is = |base: &str| {
         class.get(..base.len()).is_some_and(|start| {
@@ -289,11 +313,12 @@ fn item_kind(class: &str) -> Option<&'static str> {
     if is("REPORT") {
         let what = class.rsplit('.').next().unwrap_or_default();
         return Some(match what.to_ascii_uppercase().as_str() {
-            "IPNRN" => "Read Receipt",
-            "IPNNRN" => "Not Read Notification",
-            "DR" => "Delivery Receipt",
-            "NDR" => "Delivery Failure",
-            _ => "Report",
+            "IPNRN" => gettext_noop("Read Receipt"),
+            "IPNNRN" => gettext_noop("Not Read Notification"),
+            "DR" => gettext_noop("Delivery Receipt"),
+            "NDR" => gettext_noop("Delivery Failure"),
+            // Translators: A report about the delivery of an email.
+            _ => gettext_noop("Report"),
         });
     }
     None
@@ -310,7 +335,8 @@ fn format_mailbox(mailbox: &Mailbox) -> String {
 }
 
 /// Formats a date in local time, e.g. "Tuesday, 14 November 2023, 23:13",
-/// using a 12-hour clock where the locale does.
+/// using a 12-hour clock where the locale does. Translators choose the
+/// order and words; the locale names the days and months.
 fn format_date(time: SystemTime) -> Option<String> {
     let seconds = match time.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(after) => i64::try_from(after.as_secs()).ok()?,
@@ -318,11 +344,19 @@ fn format_date(time: SystemTime) -> Option<String> {
     };
     let date = glib::DateTime::from_unix_local(seconds).ok()?;
     let format = if uses_12_hour_clock() {
-        "%A, %-d %B %Y, %-l:%M %p"
+        // Translators: When a message was sent, for locales with a 12-hour
+        // clock, e.g. "Tuesday, 14 November 2023, 11:13 PM". Reorder or
+        // change the codes as your language needs; they are listed at
+        // https://docs.gtk.org/glib/method.DateTime.format.html
+        gettext("%A, %-d %B %Y, %-l:%M %p")
     } else {
-        "%A, %-d %B %Y, %H:%M"
+        // Translators: When a message was sent, for locales with a 24-hour
+        // clock, e.g. "Tuesday, 14 November 2023, 23:13". Reorder or change
+        // the codes as your language needs; they are listed at
+        // https://docs.gtk.org/glib/method.DateTime.format.html
+        gettext("%A, %-d %B %Y, %H:%M")
     };
-    date.format(format).ok().map(Into::into)
+    date.format(&format).ok().map(Into::into)
 }
 
 /// Whether the locale's time format uses a 12-hour clock. GLib's `%p` can't
