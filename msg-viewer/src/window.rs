@@ -2,6 +2,7 @@ use std::cell::{Cell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::{gdk, gio, glib};
 use outlook_msg::{Attachment, Message};
 
@@ -163,14 +164,14 @@ impl Window {
 
     async fn choose_file(&self) {
         let filter = gtk::FileFilter::new();
-        filter.set_name(Some("Outlook Messages"));
+        filter.set_name(Some(&gettext("Outlook Messages")));
         filter.add_mime_type("application/vnd.ms-outlook");
         filter.add_suffix("msg");
         let filters = gio::ListStore::new::<gtk::FileFilter>();
         filters.append(&filter);
 
         let dialog = gtk::FileDialog::builder()
-            .title("Open Message")
+            .title(gettext("Open Message"))
             .modal(true)
             .filters(&filters)
             .default_filter(&filter)
@@ -272,10 +273,10 @@ async fn load_message(file: &gio::File) -> Result<Message, String> {
     let bytes = bytes.to_vec();
     gio::spawn_blocking(move || Message::from_bytes(&bytes))
         .await
-        .map_err(|_| "The file couldn’t be read.".to_owned())?
+        .map_err(|_| gettext("The file couldn’t be read."))?
         .map_err(|error| {
             glib::g_debug!("msg-viewer", "Unreadable file: {error}");
-            describe_parse_error(&error).to_owned()
+            describe_parse_error(&error)
         })
 }
 
@@ -284,32 +285,32 @@ async fn load_message(file: &gio::File) -> Result<Message, String> {
 async fn read_embedded(attachment: Attachment) -> Result<Message, String> {
     gio::spawn_blocking(move || attachment.embedded_message())
         .await
-        .map_err(|_| "The message couldn’t be read.".to_owned())?
-        .ok_or_else(|| "The message couldn’t be read.".to_owned())?
+        .map_err(|_| gettext("The message couldn’t be read."))?
+        .ok_or_else(|| gettext("The message couldn’t be read."))?
         .map_err(|error| {
             glib::g_debug!("msg-viewer", "Unreadable Embedded message: {error}");
-            describe_parse_error(&error).to_owned()
+            describe_parse_error(&error)
         })
 }
 
 fn describe_load_error(error: &glib::Error) -> String {
     match error.kind::<gio::IOErrorEnum>() {
-        Some(gio::IOErrorEnum::NotFound) => "The file doesn’t exist anymore.".to_owned(),
+        Some(gio::IOErrorEnum::NotFound) => gettext("The file doesn’t exist anymore."),
         Some(gio::IOErrorEnum::PermissionDenied) => {
-            "You don’t have permission to read the file.".to_owned()
+            gettext("You don’t have permission to read the file.")
         }
-        Some(gio::IOErrorEnum::IsDirectory) => "This is a folder, not a file.".to_owned(),
+        Some(gio::IOErrorEnum::IsDirectory) => gettext("This is a folder, not a file."),
         _ => error.message().to_owned(),
     }
 }
 
-fn describe_parse_error(error: &outlook_msg::Error) -> &'static str {
+fn describe_parse_error(error: &outlook_msg::Error) -> String {
     match error {
-        outlook_msg::Error::NotCompoundFile(_) => "This file isn’t an Outlook message.",
-        outlook_msg::Error::NotAMessage => {
-            "This file isn’t an Outlook message. It may be another kind of Office document."
-        }
-        outlook_msg::Error::Damaged(_) => "The message is too damaged to be read.",
+        outlook_msg::Error::NotCompoundFile(_) => gettext("This file isn’t an Outlook message."),
+        outlook_msg::Error::NotAMessage => gettext(
+            "This file isn’t an Outlook message. It may be another kind of Office document.",
+        ),
+        outlook_msg::Error::Damaged(_) => gettext("The message is too damaged to be read."),
     }
 }
 

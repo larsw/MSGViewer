@@ -5,7 +5,10 @@ cargo_options = [
   '--target-dir', meson.project_build_root() / 'target',
   '--package', meson.project_name(),
 ]
-cargo_env = ['MSG_VIEWER_PKGDATADIR=' + pkgdatadir]
+cargo_env = [
+  'MSG_VIEWER_PKGDATADIR=' + pkgdatadir,
+  'MSG_VIEWER_LOCALEDIR=' + localedir,
+]
 
 if get_option('buildtype') == 'release'
   cargo_options += ['--release']
